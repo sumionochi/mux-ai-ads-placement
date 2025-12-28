@@ -13,6 +13,20 @@ export interface Chapter {
   title?: string;
 }
 
+export interface TransitionAnalysis {
+  frame_a_analysis: string;
+  frame_b_analysis: string;
+  visual_continuity: string;
+  product_opportunity: string;
+  brand_category: string;
+  veo_prompt: string;
+  motion_description: string;
+  lighting: string;
+  camera: string;
+  transition_reason: string;
+  duration: number;
+}
+
 export interface TransitionOpportunity {
   id: string;
   video_id: string;
@@ -22,17 +36,7 @@ export interface TransitionOpportunity {
   frame_b_url: string;
   analysis?: TransitionAnalysis;
   status: "pending" | "analyzed" | "generated" | "failed";
-}
-
-export interface TransitionAnalysis {
-  scene_a: string;
-  scene_b: string;
-  visual_continuity: string;
-  product_opportunity: string;
-  veo_prompt: string;
-  motion_description: string;
-  lighting: string;
-  camera: string;
+  generated_video_path?: string;
 }
 
 export interface Marker {
