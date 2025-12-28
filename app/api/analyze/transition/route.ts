@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { geminiVision } from "@/lib/google-ai";
+import { vision } from "@/lib/ai-clients";
 import { imageUrlToBase64 } from "@/lib/frame-utils";
 
 export async function POST(req: NextRequest) {
@@ -65,7 +65,7 @@ Example BAD veo_prompt:
 Remember: Veo 3.1 needs detailed, concrete descriptions with camera movement, timing, and lighting.`;
 
     // Call Gemini Vision API
-    const result = await geminiVision.generateContent([
+    const result = await vision.generateContent([
       {
         inlineData: {
           data: frameABase64,

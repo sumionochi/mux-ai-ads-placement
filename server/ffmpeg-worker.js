@@ -226,6 +226,55 @@ app.post('/info', async (req, res) => {
   }
 });
 
+// Stitch videos using concat
+app.post('/stitch', async (req, res) => {
+  try {
+    const { concatListPath, outputPath } = req.body;
+
+    console.log('🎬 Stitching videos...');
+    console.log('Concat list:', concatListPath);
+    console.log('Output:', outputPath);
+
+    // Ensure output directory exists
+    const outputDir = path.dirname(outputPath);
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    // Execute FFmpeg concat
+    await new Promise((resolve, reject) => {
+      ffmpeg()
+        .input(concatListPath)
+        .inputOptions(['-f concat', '-safe 0'])
+        .outputOptions([
+          '-c copy', // Copy codec (faster, no re-encoding)
+        ])
+        .output(outputPath)
+        .on('end', () => {
+          console.log('✅ Stitching complete');
+          resolve();
+        })
+        .on('error', (err) => {
+          console.error('❌ Stitching failed:', err);
+          reject(err);
+        })
+        .run();
+    });
+
+    res.json({
+      success: true,
+      outputPath,
+    });
+
+  } catch (error) {
+    console.error('Stitching error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
 // Start server
 const startServer = async () => {
   await ensureTmpDirs();
