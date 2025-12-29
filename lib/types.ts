@@ -18,18 +18,22 @@ export interface TransitionAnalysis {
   frame_b_analysis: string;
   visual_continuity: string;
   product_opportunity: string;
-  brand_category: string;
-  veo_prompt: string;
-  motion_description: string;
-  lighting: string;
-  camera: string;
-  transition_reason: string;
-  duration: number;
+  brand_category:
+    | "tech"
+    | "fashion"
+    | "food"
+    | "beverage"
+    | "lifestyle"
+    | "automotive"
+    | "beauty"
+    | "sports"
+    | "entertainment"
+    | "other";
 }
 
 export interface TransitionOpportunity {
   id: string;
-  video_id: string;
+  project_id: string; // ✅ Changed from video_id
   frame_a_time: number;
   frame_b_time: number;
   frame_a_url: string;
