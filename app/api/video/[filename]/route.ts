@@ -9,26 +9,41 @@ export async function GET(
   try {
     const { filename } = await params;
 
-    // Security: Validate filename
-    if (filename.includes("..") || filename.includes("/")) {
-      return NextResponse.json({ error: "Invalid filename" }, { status: 400 });
+    // Check in multiple locations
+    const possiblePaths = [
+      path.join(process.cwd(), "tmp", "ads", filename),
+      path.join(process.cwd(), "tmp", "final", filename),
+    ];
+
+    let videoPath: string | null = null;
+    for (const p of possiblePaths) {
+      if (fs.existsSync(p)) {
+        videoPath = p;
+        break;
+      }
     }
 
-    const videoPath = path.join(process.cwd(), "tmp", "ads", filename);
-
-    if (!fs.existsSync(videoPath)) {
+    if (!videoPath) {
+      console.error("❌ Video not found:", filename);
+      console.error("   Searched paths:", possiblePaths);
       return NextResponse.json({ error: "Video not found" }, { status: 404 });
     }
 
+    console.log("✅ Serving video:", videoPath);
     const videoBuffer = fs.readFileSync(videoPath);
 
     return new NextResponse(videoBuffer, {
       headers: {
         "Content-Type": "video/mp4",
         "Content-Length": videoBuffer.length.toString(),
+        "Accept-Ranges": "bytes",
       },
     });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("Video serving error:", error);
+    return NextResponse.json(
+      { error: "Failed to serve video" },
+      { status: 500 }
+    );
   }
 }

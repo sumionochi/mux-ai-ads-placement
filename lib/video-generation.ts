@@ -11,7 +11,7 @@ export async function generateTransitionVideo(
   prompt: string,
   duration: number = 4
 ): Promise<string> {
-  const response = await fetch("/api/generate/video", {
+  const response = await fetch("/api/generate/video-wan", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

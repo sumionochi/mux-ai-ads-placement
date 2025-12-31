@@ -23,7 +23,7 @@ export interface SmartAdSettings {
   lightingApproach: string;
   reasoning: string;
   enhancedPrompt: string;
-  duration: 4 | 8 | 12;
+  duration: 5 | 10 | 12;
 }
 
 export interface SmartAnalysisRequest {
@@ -34,4 +34,14 @@ export interface SmartAnalysisRequest {
   frameBAnalysis: string;
   visualContinuity: string;
   product: ProductInput;
+}
+
+export interface AnalysisResult {
+  productName: string;
+  detailedProductDescription: string;
+  integrationStrategy: string;
+  reasoning: string;
+  duration: 5 | 10 | 12;
+  soraPrompt: string;
+  mode: "ai" | "template"; // ⬅️ ADD THIS
 }

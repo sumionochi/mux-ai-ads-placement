@@ -25,15 +25,7 @@ import {
 import { VideoPreview } from '@/components/VideoPreview';
 import { ProductInput } from '@/components/ProductInput';
 import { PromptEditor } from '@/components/PromptEditor';
-import { ProductInput as ProductInputType } from '@/types/smart-ad';
-
-interface AnalysisResult {
-  productName: string;
-  integrationStrategy: string;
-  reasoning: string;
-  duration: 4 | 8 | 12; 
-  soraPrompt: string;
-}
+import { AnalysisResult, ProductInput as ProductInputType } from '@/types/smart-ad';
 
 export default function ReviewPage() {
   const params = useParams();
@@ -108,37 +100,162 @@ export default function ReviewPage() {
     loadProject();
   }, [params.id]);
 
-  // Handle product upload and GPT-4V analysis
-const handleProductSubmit = async (transitionId: string, product: ProductInputType) => {
-  const transition = transitions.find(t => t.id === transitionId);
+  const handleProductSubmit = async (
+    transitionId: string, 
+    product: ProductInputType,
+    mode: 'ai' | 'template' = 'template'
+  ) => {
+    const transition = transitions.find(t => t.id === transitionId);
+    
+    // ✅ UPDATED VALIDATION - Accept either image OR text
+    if (!transition) {
+      alert('Missing transition data');
+      return;
+    }
   
-  if (!transition || !product.imageBase64) {
-    alert('Missing data');
+    if (product.type === 'image' && !product.imageBase64) {
+      alert('Missing product image');
+      return;
+    }
+  
+    if (product.type === 'text' && !product.description) {
+      alert('Missing product description');
+      return;
+    }
+  
+    // Store product input BEFORE analysis
+    setProductInputs(prev => {
+      const newMap = new Map(prev);
+      newMap.set(transitionId, product);
+      console.log('📦 Stored product for transition:', transitionId);
+      return newMap;
+    });
+  
+    setAnalyzingProduct(transitionId);
+  
+    try {
+      // ✅ Handle text descriptions differently
+      if (product.type === 'text' && mode === 'template') {
+        // For text descriptions with template mode, skip GPT-4V
+        console.log('📝 Using text description directly with template');
+        
+        const HARDCODED_PROMPT_TEMPLATE = `Continue seamlessly from the provided image reference (it is the FIRST FRAME). Preserve the exact same style, character design, linework, shading, environment, lighting logic, and camera feel. Let the reference image determine the setting and cinematography.
+  
+  Goal: a natural in-world product placement that feels like part of the story (NOT a commercial cutaway). No split-screen, no collage/borders, no captions, no subtitles, no text overlays, no "showroom" background, no product spin, no sudden zooms or angle changes.
+  
+  Integrate the product described below as a real physical object that belongs in the scene:
+  - Match the product description exactly (shape, materials, colors, logo placement).
+  - Correct scale relative to the characters and room.
+  - Correct perspective + occlusion + contact (hands/feet/surface), with consistent shadows and reflections.
+  - Keep the scene narrative-first; the product is revealed through a motivated action.
+  
+  Auto-choose the most natural placement based on the scene and the product type:
+  - If wearable → worn naturally (walking/stepping/adjusting).
+  - If handheld → briefly picked up/used/put down.
+  - Otherwise → placed as a believable prop in the environment.
+  
+  Timing (in the allotted clip length): keep one continuous shot with ONE simple camera move and ONE main character action.
+  Start: continue the reference action for a brief moment with minimal change.
+  Middle: reveal/use the product clearly for about 1–2 seconds total (not centered the whole time).
+  End: return focus back to the story and finish on a stable, cut-friendly frame (hold still for the final few frames).
+  
+  Hard constraints: do not warp logos, do not change the product design, do not add extra brand text, do not introduce new characters, do not change art style.
+  
+  PRODUCT DESCRIPTION (exact, do not alter):
+  ${product.description}`;
+  
+        // Store analysis result directly
+        const analysisResult: AnalysisResult = {
+          productName: 'Product (from text description)',
+          detailedProductDescription: product.description || '',
+          integrationStrategy: 'Template-Based (Text Input)',
+          reasoning: 'Using user-provided text description directly with hardcoded prompt template.',
+          duration: 5,
+          soraPrompt: HARDCODED_PROMPT_TEMPLATE,
+          mode: 'template'
+        };
+  
+        setAnalysisResults(prev => {
+          const newMap = new Map(prev);
+          newMap.set(transitionId, analysisResult);
+          console.log('📊 Stored text-based analysis for transition:', transitionId);
+          return newMap;
+        });
+  
+        setAnalyzingProduct(null);
+        return;
+      }
+  
+      // ✅ For image mode or AI mode, use GPT-4V analysis
+      console.log('🔍 Starting GPT-4V analysis for transition:', transitionId);
+      console.log('📋 Mode:', mode);
+  
+      const response = await fetch('/api/analyze/product-ad', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transitionId: transition.id,
+          frameAUrl: transition.frame_a_url,
+          frameBUrl: transition.frame_b_url,
+          productImageBase64: product.imageBase64,
+          mode: mode || 'template',
+        }),
+      });
+  
+      const data = await response.json();
+  
+      if (!data.success) {
+        throw new Error(data.error);
+      }
+  
+      console.log('✅ Analysis complete for transition:', transitionId);
+      
+      // Store analysis result
+      setAnalysisResults(prev => {
+        const newMap = new Map(prev);
+        newMap.set(transitionId, data.analysis);
+        console.log('📊 Stored analysis for transition:', transitionId);
+        return newMap;
+      });
+  
+    } catch (error: any) {
+      console.error('❌ Analysis error for transition:', transitionId, error);
+      alert('Analysis failed: ' + error.message);
+      
+      // Remove product input on error
+      setProductInputs(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(transitionId);
+        return newMap;
+      });
+    } finally {
+      setAnalyzingProduct(null);
+    }
+  };
+
+  // Handle video generation
+const handleGenerate = async (transitionId: string, finalPrompt: string, duration: 5 | 10 | 12) => {
+  const transition = transitions.find(t => t.id === transitionId);
+
+  if (!transition) {
+    alert('Missing transition data');
     return;
   }
 
-  // Store product input BEFORE analysis
-  setProductInputs(prev => {
-    const newMap = new Map(prev);
-    newMap.set(transitionId, product);
-    console.log('📦 Stored product for transition:', transitionId);
-    console.log('📦 Current productInputs size:', newMap.size);
-    return newMap;
-  });
-
-  setAnalyzingProduct(transitionId);
+  setGenerating(transitionId);
+  setGenerationProgress(prev => ({ ...prev, [transitionId]: 0 }));
 
   try {
-    console.log('🔍 Starting GPT-4V analysis for transition:', transitionId);
+    console.log('🎬 Starting Wan 2.5 generation...');
 
-    const response = await fetch('/api/analyze/product-ad', {
+    const response = await fetch('/api/generate/video-wan', {  // ⬅️ CHANGED from /video to /video-wan
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         transitionId: transition.id,
         frameAUrl: transition.frame_a_url,
-        frameBUrl: transition.frame_b_url,
-        productImageBase64: product.imageBase64,
+        soraPrompt: finalPrompt,
+        duration: duration,
       }),
     });
 
@@ -148,78 +265,19 @@ const handleProductSubmit = async (transitionId: string, product: ProductInputTy
       throw new Error(data.error);
     }
 
-    console.log('✅ Analysis complete for transition:', transitionId);
-    
-    // Store analysis result
-    setAnalysisResults(prev => {
-      const newMap = new Map(prev);
-      newMap.set(transitionId, data.analysis);
-      console.log('📊 Stored analysis for transition:', transitionId);
-      return newMap;
-    });
+    pollGenerationProgress(data.generationId, transitionId);
 
   } catch (error: any) {
-    console.error('❌ Analysis error for transition:', transitionId, error);
-    alert('Analysis failed: ' + error.message);
-    
-    // Remove product input on error
-    setProductInputs(prev => {
-      const newMap = new Map(prev);
-      newMap.delete(transitionId);
-      return newMap;
+    console.error('❌ Generation error:', error);
+    alert('Generation failed: ' + error.message);
+    setGenerating(null);
+    setGenerationProgress(prev => {
+      const updated = { ...prev };
+      delete updated[transitionId];
+      return updated;
     });
-  } finally {
-    setAnalyzingProduct(null);
   }
 };
-
-  // Handle video generation
-  const handleGenerate = async (transitionId: string, finalPrompt: string, duration: 4 | 8 | 12) => {
-    const transition = transitions.find(t => t.id === transitionId);
-    const productInput = productInputs.get(transitionId);
-
-    if (!transition || !productInput?.imageBase64) {
-      alert('Missing data');
-      return;
-    }
-
-    setGenerating(transitionId);
-    setGenerationProgress(prev => ({ ...prev, [transitionId]: 0 }));
-
-    try {
-      console.log('🎬 Starting Sora generation...');
-
-      const response = await fetch('/api/generate/video', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transitionId: transition.id,
-          frameAUrl: transition.frame_a_url,
-          productImageBase64: productInput.imageBase64,
-          soraPrompt: finalPrompt,
-          duration: duration,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!data.success) {
-        throw new Error(data.error);
-      }
-
-      pollGenerationProgress(data.generationId, transitionId);
-
-    } catch (error: any) {
-      console.error('❌ Generation error:', error);
-      alert('Generation failed: ' + error.message);
-      setGenerating(null);
-      setGenerationProgress(prev => {
-        const updated = { ...prev };
-        delete updated[transitionId];
-        return updated;
-      });
-    }
-  };
 
   // Poll generation progress
   const pollGenerationProgress = (generationId: string, transitionId: string) => {
@@ -378,10 +436,10 @@ const handleProductSubmit = async (transitionId: string, product: ProductInputTy
       <header className="border-b border-white/5 bg-zinc-950/50 backdrop-blur-xl sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <div className="bg-gradient-to-tr from-indigo-600 to-blue-500 p-1.5 rounded-lg">
+            <div className="bg-linear-to-tr from-indigo-600 to-blue-500 p-1.5 rounded-lg">
               <Video className="w-4 h-4 text-white" />
             </div>
-            <h1 className="text-lg font-bold bg-gradient-to-r from-white to-zinc-500 bg-clip-text text-transparent">
+            <h1 className="text-lg font-bold bg-linear-to-r from-white to-zinc-500 bg-clip-text text-transparent">
               VISUAL-FIRST AD STUDIO
             </h1>
           </div>
@@ -436,7 +494,7 @@ const handleProductSubmit = async (transitionId: string, product: ProductInputTy
                       <div className="relative flex items-center justify-center gap-4">
                         <div className="relative aspect-video w-full rounded-xl overflow-hidden border border-white/10 group-hover:scale-[1.02] transition-transform duration-500">
                           <img src={transition.frame_a_url} alt="Exit" className="w-full h-full object-cover" />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                          <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent" />
                           <div className="absolute bottom-2 left-3 right-3 flex justify-between items-end">
                             <span className="text-[10px] font-bold text-white/70 uppercase">Exit Frame</span>
                             <span className="font-mono text-xs text-indigo-300 bg-indigo-500/20 px-1.5 py-0.5 rounded-md backdrop-blur-md">
@@ -451,7 +509,7 @@ const handleProductSubmit = async (transitionId: string, product: ProductInputTy
 
                         <div className="relative aspect-video w-full rounded-xl overflow-hidden border border-white/10 group-hover:scale-[1.02] transition-transform duration-500">
                           <img src={transition.frame_b_url} alt="Entry" className="w-full h-full object-cover" />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                          <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent" />
                           <div className="absolute bottom-2 left-3 right-3 flex justify-between items-end">
                             <span className="text-[10px] font-bold text-white/70 uppercase">Entry Frame</span>
                             <span className="font-mono text-xs text-indigo-300 bg-indigo-500/20 px-1.5 py-0.5 rounded-md backdrop-blur-md">
@@ -485,7 +543,7 @@ const handleProductSubmit = async (transitionId: string, product: ProductInputTy
                           
                           <ProductInput
                             key={transition.id}
-                            onSubmit={(product) => handleProductSubmit(transition.id, product)}
+                            onSubmit={(product, mode) => handleProductSubmit(transition.id, product, mode)}  // ⬅️ ADD mode parameter
                             isAnalyzing={analyzingProduct === transition.id}
                             imagePreview={imagePreviews.get(transition.id)}
                             onImageChange={(preview) => {
@@ -503,7 +561,6 @@ const handleProductSubmit = async (transitionId: string, product: ProductInputTy
                                 return newMap;
                               });
                             }}
-                            
                           />
                         </div>
                       ) : analysisResults.has(transition.id) && !transition.generated_video_path ? (
@@ -511,12 +568,14 @@ const handleProductSubmit = async (transitionId: string, product: ProductInputTy
                         <div className="space-y-4">
                           <PromptEditor
                             productName={analysisResults.get(transition.id)!.productName}
+                            detailedProductDescription={analysisResults.get(transition.id)!.detailedProductDescription}
                             integrationStrategy={analysisResults.get(transition.id)!.integrationStrategy}
                             reasoning={analysisResults.get(transition.id)!.reasoning}
-                            suggestedDuration={analysisResults.get(transition.id)!.duration}  // ⬅️ ADD
+                            suggestedDuration={analysisResults.get(transition.id)!.duration}
                             initialPrompt={analysisResults.get(transition.id)!.soraPrompt}
-                            onGenerate={(prompt, duration) => handleGenerate(transition.id, prompt, duration)}  // ⬅️ UPDATE
+                            onGenerate={(prompt, duration) => handleGenerate(transition.id, prompt, duration)}
                             isGenerating={generating === transition.id}
+                            mode={analysisResults.get(transition.id)!.mode}  // ⬅️ ADD
                           />
 
                           {generating === transition.id && generationProgress[transition.id] !== undefined && (
@@ -576,7 +635,7 @@ const handleProductSubmit = async (transitionId: string, product: ProductInputTy
 
             {/* Final Video */}
             {transitions.every(t => t.generated_video_path) && (
-              <Card className="bg-gradient-to-br from-indigo-900/20 to-purple-900/20 border-indigo-500/30 backdrop-blur-sm overflow-hidden mt-8">
+              <Card className="bg-linear-to-br from-indigo-900/20 to-purple-900/20 border-indigo-500/30 backdrop-blur-sm overflow-hidden mt-8">
                 <CardContent className="p-8 sm:p-12 text-center space-y-6">
                   <div className="inline-flex items-center gap-2 bg-indigo-500/20 border border-indigo-500/30 px-4 py-2 rounded-full">
                     <CheckCircle2 className="w-5 h-5 text-indigo-400" />
@@ -593,7 +652,7 @@ const handleProductSubmit = async (transitionId: string, product: ProductInputTy
                     <Button
                       onClick={stitchFinalVideo}
                       size="lg"
-                      className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold px-12 h-14 rounded-xl shadow-[0_0_30px_rgba(34,197,94,0.3)]"
+                      className="bg-linear-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold px-12 h-14 rounded-xl shadow-[0_0_30px_rgba(34,197,94,0.3)]"
                     >
                       <Sparkles className="w-5 h-5 mr-2 fill-current" />
                       Stitch Final Video

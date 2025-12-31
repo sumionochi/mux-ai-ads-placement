@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
 
       try {
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_APP_URL}/api/generate/video`,
+          `${process.env.NEXT_PUBLIC_APP_URL}/api/generate/video-wan`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
