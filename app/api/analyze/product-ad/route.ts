@@ -1,30 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { openai } from "@/lib/ai-clients";
 
-const HARDCODED_PROMPT_TEMPLATE = `Continue seamlessly from the provided image reference (it is the FIRST FRAME). Preserve the exact same style, character design, linework, shading, environment, lighting logic, and camera feel. Let the reference image determine the setting and cinematography.
-
-Goal: a natural in-world product placement that feels like part of the story (NOT a commercial cutaway). No split-screen, no collage/borders, no captions, no subtitles, no text overlays, no "showroom" background, no product spin, no sudden zooms or angle changes.
-
-Integrate the product described below as a real physical object that belongs in the scene:
-- Match the product description exactly (shape, materials, colors, logo placement).
-- Correct scale relative to the characters and room.
-- Correct perspective + occlusion + contact (hands/feet/surface), with consistent shadows and reflections.
-- Keep the scene narrative-first; the product is revealed through a motivated action.
-
-Auto-choose the most natural placement based on the scene and the product type:
-- If wearable → worn naturally (walking/stepping/adjusting).
-- If handheld → briefly picked up/used/put down.
-- Otherwise → placed as a believable prop in the environment.
-
-Timing (in the allotted clip length): keep one continuous shot with ONE simple camera move and ONE main character action.
-Start: continue the reference action for a brief moment with minimal change.
-Middle: reveal/use the product clearly for about 1–2 seconds total (not centered the whole time).
-End: return focus back to the story and finish on a stable, cut-friendly frame (hold still for the final few frames).
-
-Hard constraints: do not warp logos, do not change the product design, do not add extra brand text, do not introduce new characters, do not change art style.
-
-PRODUCT DESCRIPTION (exact, do not alter):
-{{PRODUCT_DESCRIPTION}}`;
+const HARDCODED_PROMPT_TEMPLATE = `
+The video continues smoothly. A {{PRODUCT_DESCRIPTION}} appears naturally in the scene. Ideally someone interacts with or holds the product, but at minimum it blends seamlessly into the environment. Keep the original visual style.
+`;
 
 export async function POST(req: NextRequest) {
   try {

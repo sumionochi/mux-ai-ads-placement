@@ -45,6 +45,38 @@ export default function ReviewPage() {
   const [showFinalPreview, setShowFinalPreview] = useState(false);
   const [imagePreviews, setImagePreviews] = useState<Map<string, string>>(new Map());
 
+  // NEW: Phase 5 - Selection & Stitching States
+  const [selectedTransitions, setSelectedTransitions] = useState<Set<string>>(new Set());
+  const [stitching, setStitching] = useState(false);
+  const [stitchProgress, setStitchProgress] = useState(0);
+  const [stitchStatus, setStitchStatus] = useState<string>('');
+  const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
+
+  // Auto-select all completed transitions when they're ready
+useEffect(() => {
+  const completed = new Set(
+    transitions
+      .filter(t => t.generated_video_path)
+      .map(t => t.id)
+  );
+  setSelectedTransitions(completed);
+}, [transitions]);
+
+// Toggle transition selection
+const toggleTransitionSelection = (transitionId: string) => {
+  setSelectedTransitions(prev => {
+    const newSet = new Set(prev);
+    if (newSet.has(transitionId)) {
+      newSet.delete(transitionId);
+      console.log('❌ Deselected transition:', transitionId);
+    } else {
+      newSet.add(transitionId);
+      console.log('✅ Selected transition:', transitionId);
+    }
+    return newSet;
+  });
+};
+
   useEffect(() => {
     async function loadProject() {
       if (!params.id) return;
@@ -328,40 +360,129 @@ const handleGenerate = async (transitionId: string, finalPrompt: string, duratio
     }, 2000);
   };
 
-  const stitchFinalVideo = async () => {
-    if (!project) return;
-    
-    try {
-      console.log('🎬 Stitching final video');
-      
-      const response = await fetch('/api/stitch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          projectId: project.id,
-          segments: [],
-          transitions: transitions.filter(t => t.generated_video_path),
-        }),
-      });
+// Handle final video stitching
+const stitchFinalVideo = async () => {
+  if (!project || selectedTransitions.size === 0) {
+    alert('Please select at least one transition to stitch');
+    return;
+  }
 
+  // Verify project has required data
+  if (!project.mux_asset_id) {
+    alert('Missing Mux asset ID. Please re-upload your video.');
+    return;
+  }
+  
+  const selectedTransitionsList = transitions.filter(t => 
+    selectedTransitions.has(t.id) && t.generated_video_path
+  );
+
+  if (selectedTransitionsList.length === 0) {
+    alert('No valid transitions selected');
+    return;
+  }
+
+  setStitching(true);
+  setStitchProgress(0);
+  setStitchStatus('Starting...');
+  setFinalVideoUrl(null);
+
+  try {
+    console.log('🎬 Starting stitch with', selectedTransitionsList.length, 'transitions');
+    console.log('📦 Project data:', {
+      id: project.id,
+      mux_asset_id: project.mux_asset_id,
+      playback_id: project.playback_id
+    });
+    
+    const response = await fetch('/api/stitch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        projectId: project.id,
+        muxAssetId: project.mux_asset_id,        // ⬅️ ADD THIS
+        playbackId: project.playback_id,         // ⬅️ ADD THIS
+        selectedTransitions: selectedTransitionsList,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to start stitching');
+    }
+
+    console.log('✅ Stitch job started, polling for progress...');
+    
+    // Start polling progress
+    pollStitchProgress(project.id);
+
+  } catch (error: any) {
+    console.error('❌ Stitching error:', error);
+    alert('Stitching failed: ' + error.message);
+    setStitching(false);
+    setStitchProgress(0);
+    setStitchStatus('');
+  }
+};
+
+// Poll stitch progress
+const pollStitchProgress = (projectId: string) => {
+  const pollInterval = setInterval(async () => {
+    try {
+      const response = await fetch(`/api/stitch/status/${projectId}`);
       const data = await response.json();
 
       if (data.success) {
-        setShowFinalPreview(true);
-        
-        const updatedProject = {
-          ...project,
-          final_playback_id: data.outputPath,
-        };
-        saveProject(updatedProject);
-        setProject(updatedProject);
-      }
+        setStitchProgress(data.progress || 0);
+        setStitchStatus(getStitchStatusMessage(data.status, data));
 
-    } catch (error: any) {
-      console.error('❌ Stitching error:', error);
-      alert('Stitching failed: ' + error.message);
+        if (data.status === 'completed') {
+          clearInterval(pollInterval);
+          console.log('✅ Stitching completed!');
+          
+          setFinalVideoUrl(data.videoPath);
+          
+          // Update project with final video
+          if (project) {
+            const updatedProject = {
+              ...project,
+              final_playback_id: data.videoPath,
+            };
+            saveProject(updatedProject);
+            setProject(updatedProject);
+          }
+          
+          setStitching(false);
+          
+        } else if (data.status === 'failed') {
+          clearInterval(pollInterval);
+          console.error('❌ Stitching failed:', data.error);
+          alert('Stitching failed: ' + (data.error || 'Unknown error'));
+          setStitching(false);
+          setStitchProgress(0);
+          setStitchStatus('');
+        }
+      }
+    } catch (error) {
+      console.error('❌ Polling error:', error);
     }
+  }, 2000); // Poll every 2 seconds
+};
+
+// Helper to get user-friendly status messages
+const getStitchStatusMessage = (status: string, data: any) => {
+  const messages: Record<string, string> = {
+    downloading: 'Downloading original video from Mux...',
+    planning: 'Planning video segments...',
+    clipping: `Clipping segments... (${data.segmentsProcessed || 0}/${data.totalSegments || 0})`,
+    concatenating: 'Stitching all segments together...',
+    finalizing: 'Finalizing video...',
+    completed: 'Complete!',
+    failed: 'Failed',
   };
+  return messages[status] || 'Processing...';
+};
 
   const resetTransition = (transitionId: string) => {
     // Clean up preview URL
@@ -608,12 +729,32 @@ const handleGenerate = async (transitionId: string, finalPrompt: string, duratio
                               Ready
                             </Badge>
                           </div>
-
+                      
                           <VideoPreview 
                             videoUrl={transition.generated_video_path}
                             title={`Transition ${idx + 1}`}
                           />
-
+                      
+                          {/* NEW: Selection Checkbox */}
+                          <div className="border-t border-zinc-800 pt-4">
+                            <label className="flex items-center gap-3 cursor-pointer group">
+                              <input
+                                type="checkbox"
+                                checked={selectedTransitions.has(transition.id)}
+                                onChange={() => toggleTransitionSelection(transition.id)}
+                                className="w-5 h-5 rounded border-2 border-zinc-700 bg-zinc-900 checked:bg-indigo-600 checked:border-indigo-600 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-zinc-950 cursor-pointer transition-all"
+                              />
+                              <span className="text-sm font-medium text-zinc-400 group-hover:text-zinc-300 transition-colors">
+                                Include in final video
+                              </span>
+                              {selectedTransitions.has(transition.id) && (
+                                <Badge className="bg-indigo-500/20 text-indigo-400 border-indigo-500/30 text-[9px] ml-auto">
+                                  Selected
+                                </Badge>
+                              )}
+                            </label>
+                          </div>
+                      
                           <Button
                             onClick={() => {
                               if (confirm('Start over with different product?')) {
@@ -633,38 +774,123 @@ const handleGenerate = async (transitionId: string, finalPrompt: string, duratio
               </Card>
             ))}
 
-            {/* Final Video */}
-            {transitions.every(t => t.generated_video_path) && (
-              <Card className="bg-linear-to-br from-indigo-900/20 to-purple-900/20 border-indigo-500/30 backdrop-blur-sm overflow-hidden mt-8">
-                <CardContent className="p-8 sm:p-12 text-center space-y-6">
-                  <div className="inline-flex items-center gap-2 bg-indigo-500/20 border border-indigo-500/30 px-4 py-2 rounded-full">
-                    <CheckCircle2 className="w-5 h-5 text-indigo-400" />
-                    <span className="text-sm font-bold text-indigo-400 uppercase tracking-widest">
-                      All Transitions Ready
-                    </span>
-                  </div>
-
-                  <h3 className="text-2xl sm:text-3xl font-bold text-white">
-                    Create Final Video
-                  </h3>
-
-                  {!showFinalPreview ? (
-                    <Button
-                      onClick={stitchFinalVideo}
-                      size="lg"
-                      className="bg-linear-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold px-12 h-14 rounded-xl shadow-[0_0_30px_rgba(34,197,94,0.3)]"
-                    >
-                      <Sparkles className="w-5 h-5 mr-2 fill-current" />
-                      Stitch Final Video
-                    </Button>
-                  ) : project?.final_playback_id && (
-                    <div className="max-w-4xl mx-auto">
-                      <VideoPreview 
-                        videoUrl={`/api/video/${project.final_playback_id.split('/').pop()}`}
-                        title="Final Video"
-                      />
+            {/* Final Video Section - Show when ANY transitions are complete */}
+            {transitions.some(t => t.generated_video_path) && (
+              <Card className="bg-gradient-to-br from-indigo-900/20 to-purple-900/20 border-indigo-500/30 backdrop-blur-sm overflow-hidden mt-8">
+                <CardContent className="p-8 sm:p-12">
+                  <div className="text-center space-y-6">
+                    {/* Status Badge */}
+                    <div className="inline-flex items-center gap-2 bg-indigo-500/20 border border-indigo-500/30 px-4 py-2 rounded-full">
+                      <CheckCircle2 className="w-5 h-5 text-indigo-400" />
+                      <span className="text-sm font-bold text-indigo-400 uppercase tracking-widest">
+                        {selectedTransitions.size} Ad{selectedTransitions.size !== 1 ? 's' : ''} Selected
+                      </span>
                     </div>
-                  )}
+
+                    <div className="space-y-2">
+                      <h3 className="text-2xl sm:text-3xl font-bold text-white">
+                        Create Final Video
+                      </h3>
+                      <p className="text-zinc-400 max-w-2xl mx-auto text-sm">
+                        Selected ads will be stitched into your original video at the transition points.
+                      </p>
+                    </div>
+
+                    {/* Selection Summary */}
+                    {selectedTransitions.size > 0 && (
+                      <div className="flex flex-wrap gap-2 justify-center">
+                        {transitions
+                          .filter(t => selectedTransitions.has(t.id))
+                          .map((t) => {
+                            const index = transitions.indexOf(t);
+                            return (
+                              <Badge
+                                key={t.id}
+                                className="bg-indigo-500/20 text-indigo-300 border-indigo-500/30"
+                              >
+                                Transition #{index + 1}
+                              </Badge>
+                            );
+                          })}
+                      </div>
+                    )}
+
+                    {/* Stitch Button / Progress / Final Video */}
+                    {!stitching && !finalVideoUrl ? (
+                      <Button
+                        onClick={stitchFinalVideo}
+                        disabled={selectedTransitions.size === 0}
+                        size="lg"
+                        className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold px-12 h-14 rounded-xl shadow-[0_0_30px_rgba(34,197,94,0.3)] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                      >
+                        <Sparkles className="w-5 h-5 mr-2 fill-current" />
+                        Stitch {selectedTransitions.size} Ad{selectedTransitions.size !== 1 ? 's' : ''} into Video
+                      </Button>
+                    ) : stitching ? (
+                      // Progress UI
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-center gap-2">
+                          <Loader2 className="w-5 h-5 text-green-400 animate-spin" />
+                          <span className="text-sm font-medium text-zinc-400">
+                            {stitchStatus}
+                          </span>
+                        </div>
+                        <div className="max-w-md mx-auto space-y-2">
+                          <Progress value={stitchProgress} className="h-3 bg-zinc-800" />
+                          <p className="text-xs text-zinc-500 text-center">
+                            {stitchProgress}% complete
+                          </p>
+                        </div>
+                      </div>
+                    ) : finalVideoUrl ? (
+                      // Final Video Preview
+                      <div className="space-y-4">
+                        <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-sm px-4 py-2">
+                          <CheckCircle2 className="w-4 h-4 mr-2 inline" />
+                          Final Video Ready
+                        </Badge>
+                        <div className="max-w-4xl mx-auto">
+                          <VideoPreview 
+                            videoUrl={finalVideoUrl}
+                            title="Final Video with Ads"
+                          />
+                        </div>
+                        <div className="flex gap-3 justify-center">
+                          <Button
+                            onClick={() => {
+                              // Create download link
+                              const link = document.createElement('a');
+                              link.href = finalVideoUrl;
+                              link.download = `final_video_${project.id}.mp4`;
+                              document.body.appendChild(link);
+                              link.click();
+                              document.body.removeChild(link);
+                            }}
+                            className="bg-blue-600 hover:bg-blue-500"
+                          >
+                            Download Video
+                          </Button>
+                          <Button
+                            onClick={() => {
+                              setFinalVideoUrl(null);
+                              setStitchProgress(0);
+                              setStitchStatus('');
+                              // Re-select all completed transitions
+                              setSelectedTransitions(new Set(
+                                transitions
+                                  .filter(t => t.generated_video_path)
+                                  .map(t => t.id)
+                              ));
+                            }}
+                            variant="outline"
+                            className="border-zinc-800 hover:bg-zinc-900"
+                          >
+                            Create Different Version
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
                 </CardContent>
               </Card>
             )}
