@@ -46,6 +46,250 @@ Traditional video advertising faces critical challenges:
 Original Video → AI Scene Analysis → Smart Ad Placement → Contextual Ad Generation → Seamless Stitching
 ```
 
+Here's the section to add **right before "### Key Innovation:"** (after the solution diagram):
+
+---
+
+## 🎥 **Mux-Powered Video Pipeline**
+
+**Mux is the backbone of our entire workflow** - from initial upload through final delivery. Here's how we leverage Mux's powerful features at every step:
+
+### **📤 Phase 1: Upload & Auto-Processing**
+
+**Direct Upload to Mux**
+
+```typescript
+// Create direct upload with auto-features enabled
+const upload = await mux.video.uploads.create({
+  new_asset_settings: {
+    playback_policy: ["public"],
+    inputs: [
+      {
+        generated_subtitles: [
+          {
+            language_code: "en",
+            name: "English (Auto)",
+          },
+        ],
+      },
+    ],
+  },
+});
+```
+
+**What Mux Provides:**
+
+- ✅ **Direct Upload API** - No intermediate storage needed
+- ✅ **Automatic Transcoding** - Multiple resolutions (1080p, 720p, 480p, 360p)
+- ✅ **HLS Streaming** - Adaptive bitrate for optimal playback
+- ✅ **Auto-Generated Captions** - English speech-to-text
+- ✅ **AI Chapter Detection** - Smart scene segmentation
+- ✅ **Thumbnail Generation** - Preview images at key timestamps
+
+### **🎯 Phase 2: AI Chapter Analysis**
+
+**Mux AI Workflows** automatically analyze your video and generate intelligent chapters:
+
+```typescript
+// Fetch auto-generated chapters from Mux
+const asset = await mux.video.assets.retrieve(assetId);
+const chapters = asset.chapters; // AI-detected scene breaks
+
+// Example chapters:
+[
+  { start_time: 0, text: "Introduction" },
+  { start_time: 45.2, text: "Main Content" },
+  { start_time: 120.5, text: "Demonstration" },
+  { start_time: 180.3, text: "Conclusion" },
+];
+```
+
+**How We Use Chapters:**
+
+- 🎬 **Transition Detection** - Chapters = natural scene breaks
+- 📍 **Ad Placement Opportunities** - Place ads between chapters
+- 🖼️ **Frame Extraction** - Use chapter timestamps to extract frames
+- 🎯 **Smart Targeting** - Match ads to chapter context
+
+### **🔄 The Complete Mux Integration Flow**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 1: Upload to Mux                                           │
+│ ┌─────────────────────────────────────────────────────────┐    │
+│ │ User uploads video → Mux Direct Upload API              │    │
+│ │         ↓                                               │    │
+│ │ Mux processes video:                                    │    │
+│ │  • Transcodes to multiple resolutions                   │    │
+│ │  • Generates adaptive HLS stream                        │    │
+│ │  • Creates captions via speech-to-text                  │    │
+│ │  • Detects chapters using AI                            │    │
+│ │  • Extracts thumbnail images                            │    │
+│ │         ↓                                               │    │
+│ │ Returns: Asset ID + Playback ID + Chapters              │    │
+│ └─────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 2: Generate Transition Opportunities                       │
+│ ┌─────────────────────────────────────────────────────────┐    │
+│ │ Use Mux chapters as transition points                   │    │
+│ │         ↓                                               │    │
+│ │ For each chapter boundary:                              │    │
+│ │  • Extract exit frame (Mux thumbnail)                   │    │
+│ │  • Extract entry frame (next chapter thumbnail)         │    │
+│ │  • Calculate gap duration                               │    │
+│ │  • Create transition opportunity                        │    │
+│ │         ↓                                               │    │
+│ │ Result: 3-8 ad placement opportunities                  │    │
+│ └─────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 3: Generate AI Ad Videos                                   │
+│ ┌─────────────────────────────────────────────────────────┐    │
+│ │ Use Mux thumbnails as reference frames                  │    │
+│ │         ↓                                               │    │
+│ │ GPT-4V analyzes Mux frames + product                    │    │
+│ │         ↓                                               │    │
+│ │ Wan 2.5 generates video using Mux thumbnail             │    │
+│ │         ↓                                               │    │
+│ │ Result: 5-10 second contextual ad videos                │    │
+│ └─────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 4: Download & Stitch                                       │
+│ ┌─────────────────────────────────────────────────────────┐    │
+│ │ Download original from Mux HLS stream                   │    │
+│ │         ↓                                               │    │
+│ │ FFmpeg stitches ads into video                          │    │
+│ │         ↓                                               │    │
+│ │ Result: Final video with seamless ad integration        │    │
+│ └─────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 5: Upload Final Video to Mux                               │
+│ ┌─────────────────────────────────────────────────────────┐    │
+│ │ Upload stitched video → Mux Direct Upload               │    │
+│ │         ↓                                               │    │
+│ │ Mux creates new asset with:                             │    │
+│ │  • New Playback ID                                      │    │
+│ │  • Auto-generated captions                              │    │
+│ │  • HLS streaming ready                                  │    │
+│ │  • Thumbnail generation                                 │    │
+│ │         ↓                                               │    │
+│ │ Display in Mux Player with:                             │    │
+│ │  🟡 Yellow ad markers on timeline                       │    │
+│ │  📚 Chapter navigation                                   │    │
+│ │  📝 Closed captions                                     │    │
+│ │  🌍 Multi-language support                              │    │
+│ └─────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 6: AI Features (Powered by Mux Captions)                   │
+│ ┌─────────────────────────────────────────────────────────┐    │
+│ │ Fetch Mux auto-generated captions (VTT)                 │    │
+│ │         ↓                                               │    │
+│ │ GPT-4 analyzes transcript:                              │    │
+│ │  • Generates smart chapters with timestamps             │    │
+│ │  • Creates video summary                                │    │
+│ │  • Extracts relevant tags                               │    │
+│ │         ↓                                               │    │
+│ │ Integrate into Mux Player:                              │    │
+│ │  • Chapters appear in player menu                       │    │
+│ │  • Summary shown in metadata                            │    │
+│ │  • Enhanced navigation                                  │    │
+│ └─────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 7: Multi-Language Captions                                 │
+│ ┌─────────────────────────────────────────────────────────┐    │
+│ │ Fetch English captions from Mux                         │    │
+│ │         ↓                                               │    │
+│ │ GPT-4 translates to 5 languages                         │    │
+│ │         ↓                                               │    │
+│ │ Add translated tracks to Mux Player                     │    │
+│ │         ↓                                               │    │
+│ │ Result: Captions in 6 languages with language selector  │    │
+│ └─────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### **🎬 Mux Player Features**
+
+Our final video is delivered using **Mux Player** - a professional, feature-rich HTML5 video player:
+
+**Built-in Features:**
+
+- ⚡ **Adaptive Streaming** - HLS with automatic quality selection
+- 🎨 **Custom Branding** - Configurable accent colors and styling
+- 📱 **Responsive** - Works perfectly on desktop, tablet, and mobile
+- ⌨️ **Keyboard Shortcuts** - Full keyboard navigation support
+- 🖼️ **Picture-in-Picture** - Native PiP support
+- 📺 **Fullscreen** - True fullscreen mode
+- 🔊 **Volume Control** - Fine-grained audio control
+- ⏩ **Playback Speed** - 0.5x to 2x speed control
+
+**Custom Enhancements:**
+
+- 🟡 **Ad Markers** - Visual timeline markers showing ad placements
+- 📚 **AI Chapters** - Smart chapter navigation
+- 🌍 **Multi-Language** - Caption selector for 6 languages
+- 📊 **Asset Info** - Display Mux Asset ID and Playback ID
+- 🎯 **Interactive** - Hover effects and click-to-jump functionality
+
+### **💡 Why Mux?**
+
+**1. End-to-End Video Infrastructure**
+
+- Upload, transcode, deliver - all in one platform
+- No need for separate storage or CDN services
+- Automatic optimization for all devices
+
+**2. AI-Powered Features**
+
+- Auto-generated captions save hours of manual work
+- AI chapter detection eliminates manual scene marking
+- Smart content analysis for better ad placement
+
+**3. Professional Player**
+
+- Production-ready player with zero configuration
+- Handles all edge cases (buffering, errors, adaptive streaming)
+- Consistent experience across all browsers and devices
+
+**4. Developer-Friendly**
+
+- Simple API with excellent documentation
+- React components for easy integration
+- Real-time asset status and webhook support
+
+**5. Scalable & Reliable**
+
+- Built to handle millions of views
+- Global CDN for low latency worldwide
+- 99.9% uptime SLA
+
+### **📊 Mux Integration Benefits**
+
+| Feature              | Without Mux                              | With Mux                     |
+| -------------------- | ---------------------------------------- | ---------------------------- |
+| **Video Upload**     | 5+ minutes (S3 + CloudFront setup)       | 30 seconds (direct upload)   |
+| **Transcoding**      | Manual ffmpeg jobs                       | Automatic multi-resolution   |
+| **Captions**         | Manual transcription ($1-2/min)          | Auto-generated (free)        |
+| **Chapters**         | Manual scene detection                   | AI-powered detection         |
+| **Player**           | Build from scratch or use generic player | Professional player included |
+| **Streaming**        | Configure HLS/DASH manually              | Automatic adaptive streaming |
+| **Global Delivery**  | Setup CDN infrastructure                 | Built-in global CDN          |
+| **Total Setup Time** | Days/Weeks                               | Minutes                      |
+| **Maintenance**      | Ongoing infrastructure management        | Zero maintenance             |
+
+---
+
 ### **Key Innovation:**
 
 1. **🔍 GPT-4 Vision Analysis** - Understands visual context and scene transitions
