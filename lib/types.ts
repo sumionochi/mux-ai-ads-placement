@@ -33,14 +33,13 @@ export interface TransitionAnalysis {
 
 export interface TransitionOpportunity {
   id: string;
-  project_id: string; // ✅ Changed from video_id
   frame_a_time: number;
   frame_b_time: number;
   frame_a_url: string;
   frame_b_url: string;
-  analysis?: TransitionAnalysis;
-  status: "pending" | "analyzed" | "generated" | "failed";
   generated_video_path?: string;
+  ad_duration?: number; // ⬅️ ADD THIS
+  status: "pending" | "analyzing" | "generating" | "generated";
 }
 
 export interface Marker {
@@ -62,4 +61,32 @@ export interface VideoProject {
   final_playback_id?: string;
   markers?: Marker[];
   created_at: number;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  video_url: string;
+  mux_asset_id?: string;
+  playback_id?: string;
+  final_playback_id?: string;
+
+  // NEW: Caption tracking
+  caption_track_id?: string; // ⬅️ ADD THIS
+  caption_status?: "pending" | "ready" | "error"; // ⬅️ ADD THIS
+
+  // NEW: AI features (we'll use these later)
+  ai_chapters?: Array<{
+    // ⬅️ ADD THIS
+    startTime: number;
+    title: string;
+  }>;
+  summary?: string; // ⬅️ ADD THIS
+  tags?: string[]; // ⬅️ ADD THIS
+  ad_markers?: Array<{
+    // ⬅️ ADD THIS
+    time: number;
+    duration: number;
+    label: string;
+  }>;
 }

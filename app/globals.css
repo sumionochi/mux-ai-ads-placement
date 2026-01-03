@@ -119,3 +119,32 @@
     @apply bg-background text-foreground selection:bg-primary/30;
   }
 }
+
+/* Ad Marker Styles for Mux Player */
+mux-player::part(time-range) {
+  position: relative;
+}
+
+mux-player .ad-marker {
+  position: absolute;
+  bottom: 0;
+  height: 100%;
+  background-color: #FFD700;
+  opacity: 0.8;
+  pointer-events: none;
+  z-index: 10;
+}
+
+mux-player .ad-marker:hover {
+  opacity: 1;
+}
+
+/* Chapter styles */
+mux-player::part(chapters-button) {
+  color: #6366F1;
+}
+
+/* Caption styles */
+mux-player::part(captions-button) {
+  color: #6366F1;
+}

@@ -13,13 +13,25 @@ export async function POST(req: NextRequest) {
     const upload = await mux.video.uploads.create({
       new_asset_settings: {
         playback_policy: ["public"],
-        // Removed mp4_support - not needed and deprecated
+        inputs: [
+          // ⬅️ NEW: inputs array inside new_asset_settings
+          {
+            generated_subtitles: [
+              // ⬅️ NEW: captions config inside inputs
+              {
+                language_code: "en",
+                name: "English (Auto)",
+              },
+            ],
+          },
+        ],
       },
       cors_origin: "*",
       timeout: 3600, // 1 hour timeout
     });
 
     console.log("✅ Mux upload created:", upload.id);
+    console.log("✅ Auto-captions enabled for English");
 
     return NextResponse.json({
       success: true,

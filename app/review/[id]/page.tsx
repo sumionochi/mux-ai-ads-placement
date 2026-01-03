@@ -26,6 +26,7 @@ import { VideoPreview } from '@/components/VideoPreview';
 import { ProductInput } from '@/components/ProductInput';
 import { PromptEditor } from '@/components/PromptEditor';
 import { AnalysisResult, ProductInput as ProductInputType } from '@/types/smart-ad';
+import { MuxPlayerWithMarkers } from '@/components/MuxPlayerWithMarkers';
 
 export default function ReviewPage() {
   const params = useParams();
@@ -51,6 +52,23 @@ export default function ReviewPage() {
   const [stitchProgress, setStitchProgress] = useState(0);
   const [stitchStatus, setStitchStatus] = useState<string>('');
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
+  const [finalVideoFilePath, setFinalVideoFilePath] = useState<string | null>(null); 
+  const [uploadingToMux, setUploadingToMux] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [finalVideoMuxAssetId, setFinalVideoMuxAssetId] = useState<string | null>(null);
+  const [finalVideoPlaybackId, setFinalVideoPlaybackId] = useState<string | null>(null);
+  const [generatingAI, setGeneratingAI] = useState(false);
+  const [aiProgress, setAiProgress] = useState<{
+    step: 'idle' | 'chapters' | 'summary' | 'complete' | 'error';
+    message: string;
+  }>({ step: 'idle', message: '' });
+  const [aiChapters, setAiChapters] = useState<Array<{ startTime: number; title: string }>>([]);
+  const [aiSummary, setAiSummary] = useState<{
+    title: string;
+    description: string;
+    tags: string[];
+  } | null>(null);
+  const [showAiResults, setShowAiResults] = useState(false);
 
   // Auto-select all completed transitions when they're ready
 useEffect(() => {
@@ -317,18 +335,39 @@ const handleGenerate = async (transitionId: string, finalPrompt: string, duratio
       try {
         const response = await fetch(`/api/generate/status/${generationId}`);
         const data = await response.json();
-
+  
         if (data.success) {
           setGenerationProgress(prev => ({ ...prev, [transitionId]: data.progress }));
-
+  
           if (data.status === 'completed') {
             clearInterval(pollInterval);
+            
+            // ✅ NEW: Get the actual video duration
+            let videoDuration = 5; // Default fallback
+            
+            try {
+              const video = document.createElement('video');
+              video.src = data.videoUrl;
+              
+              await new Promise((resolve, reject) => {
+                video.addEventListener('loadedmetadata', () => {
+                  videoDuration = Math.round(video.duration);
+                  console.log(`✅ Ad video duration: ${videoDuration}s for ${transitionId}`);
+                  resolve(null);
+                });
+                video.addEventListener('error', reject);
+                setTimeout(reject, 5000); // 5s timeout
+              });
+            } catch (error) {
+              console.warn('⚠️ Could not get video duration, using default 5s');
+            }
             
             const updatedTransitions = transitions.map(t =>
               t.id === transitionId
                 ? { 
                     ...t, 
                     generated_video_path: data.videoUrl,
+                    ad_duration: videoDuration,  // ⬅️ STORE ACTUAL DURATION
                     status: 'generated' as const 
                   }
                 : t
@@ -341,7 +380,7 @@ const handleGenerate = async (transitionId: string, finalPrompt: string, duratio
               saveProject(updatedProject);
               setProject(updatedProject);
             }
-
+  
             setGenerating(null);
             setGenerationProgress(prev => {
               const updated = { ...prev };
@@ -441,20 +480,20 @@ const pollStitchProgress = (projectId: string) => {
           clearInterval(pollInterval);
           console.log('✅ Stitching completed!');
           
-          setFinalVideoUrl(data.videoPath);
+          setFinalVideoUrl(data.videoUrl);           // ⬅️ CHANGED: Store URL for display
+          setFinalVideoFilePath(data.videoPath);     // ⬅️ ADD: Store file path for upload
           
           // Update project with final video
           if (project) {
             const updatedProject = {
               ...project,
-              final_playback_id: data.videoPath,
+              final_playback_id: data.videoUrl,      // ⬅️ Store URL in project
             };
             saveProject(updatedProject);
             setProject(updatedProject);
           }
           
           setStitching(false);
-          
         } else if (data.status === 'failed') {
           clearInterval(pollInterval);
           console.error('❌ Stitching failed:', data.error);
@@ -545,6 +584,143 @@ const getStitchStatusMessage = (status: string, data: any) => {
     );
   }
 
+  // Generate AI chapters and summary
+  const generateAIFeatures = async () => {
+    if (!finalVideoMuxAssetId) {
+      alert('Please upload the final video to Mux first.');
+      return;
+    }
+
+    setGeneratingAI(true);
+    setShowAiResults(true);
+    setAiProgress({ step: 'chapters', message: 'Generating AI chapters...' });
+
+    try {
+      // Step 1: Generate Chapters
+      const chaptersRes = await fetch('/api/mux/chapters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assetId: finalVideoMuxAssetId,  // ⬅️ CHANGED: Use final video asset ID
+          language: 'en',
+          provider: 'openai',
+        }),
+      });
+
+      const chaptersData = await chaptersRes.json();
+
+      if (!chaptersData.success) {
+        throw new Error(chaptersData.error || 'Failed to generate chapters');
+      }
+
+      setAiChapters(chaptersData.chapters);
+      console.log('✅ Chapters generated:', chaptersData.chapters);
+
+      // Step 2: Generate Summary
+      setAiProgress({ step: 'summary', message: 'Generating video summary...' });
+
+      const summaryRes = await fetch('/api/mux/summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assetId: finalVideoMuxAssetId,  // ⬅️ CHANGED: Use final video asset ID
+          provider: 'openai',
+          tone: 'professional',
+        }),
+      });
+
+      const summaryData = await summaryRes.json();
+
+      if (!summaryData.success) {
+        throw new Error(summaryData.error || 'Failed to generate summary');
+      }
+
+      setAiSummary({
+        title: summaryData.title,
+        description: summaryData.description,
+        tags: summaryData.tags,
+      });
+      console.log('✅ Summary generated:', summaryData);
+
+      // Step 3: Complete
+      setAiProgress({ step: 'complete', message: 'AI features generated successfully!' });
+
+      // Save to project
+      const updatedProject = {
+        ...project!,
+        ai_chapters: chaptersData.chapters,
+        ai_title: summaryData.title,
+        ai_description: summaryData.description,
+        tags: summaryData.tags,
+      };
+      setProject(updatedProject);
+      saveProject(updatedProject);
+
+    } catch (error: any) {
+      console.error('❌ AI generation failed:', error);
+      setAiProgress({ 
+        step: 'error', 
+        message: error.message || 'Failed to generate AI features. Please try again.' 
+      });
+    } finally {
+      setGeneratingAI(false);
+    }
+  };
+
+  // Upload final video to Mux
+  const uploadFinalVideoToMux = async () => {
+    if (!finalVideoUrl) {
+      alert('No final video to upload');
+      return;
+    }
+
+    setUploadingToMux(true);
+    setUploadProgress(0);
+
+    try {
+      console.log('📤 Uploading final video to Mux...');
+
+      const response = await fetch('/api/mux/upload-final', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videoPath: finalVideoFilePath,  
+          projectId: project!.id,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to upload to Mux');
+      }
+
+      console.log('✅ Uploaded to Mux:', data.assetId);
+
+      // Store the new Mux asset info
+      setFinalVideoMuxAssetId(data.assetId);
+      setFinalVideoPlaybackId(data.playbackId);
+
+      // Update project
+      const updatedProject = {
+        ...project!,
+        final_mux_asset_id: data.assetId,
+        final_mux_playback_id: data.playbackId,
+      };
+      saveProject(updatedProject);
+      setProject(updatedProject);
+
+      alert('✅ Video uploaded to Mux! AI features are now available.');
+
+    } catch (error: any) {
+      console.error('❌ Upload to Mux failed:', error);
+      alert('Upload failed: ' + error.message);
+    } finally {
+      setUploadingToMux(false);
+      setUploadProgress(0);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-50 font-sans selection:bg-indigo-500/30">
       {/* Background */}
@@ -552,7 +728,7 @@ const getStitchStatusMessage = (status: string, data: any) => {
         <div className="absolute top-[5%] left-[10%] w-[40%] h-[40%] rounded-full bg-blue-600/5 blur-[120px]" />
         <div className="absolute bottom-[5%] right-[10%] w-[30%] h-[30%] rounded-full bg-indigo-600/5 blur-[120px]" />
       </div>
-
+  
       {/* Header */}
       <header className="border-b border-white/5 bg-zinc-950/50 backdrop-blur-xl sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
@@ -569,7 +745,7 @@ const getStitchStatusMessage = (status: string, data: any) => {
           </Badge>
         </div>
       </header>
-
+  
       <main className="relative max-w-6xl mx-auto px-6 py-12 sm:py-16">
         {/* Summary */}
         <div className="mb-12 space-y-2">
@@ -590,7 +766,7 @@ const getStitchStatusMessage = (status: string, data: any) => {
             </span>
           </div>
         </div>
-
+  
         {/* Transitions */}
         {transitions.length > 0 ? (
           <div className="space-y-8">
@@ -611,7 +787,7 @@ const getStitchStatusMessage = (status: string, data: any) => {
                           {Math.floor(transition.frame_b_time - transition.frame_a_time)}s Gap
                         </Badge>
                       </div>
-
+  
                       <div className="relative flex items-center justify-center gap-4">
                         <div className="relative aspect-video w-full rounded-xl overflow-hidden border border-white/10 group-hover:scale-[1.02] transition-transform duration-500">
                           <img src={transition.frame_a_url} alt="Exit" className="w-full h-full object-cover" />
@@ -627,7 +803,7 @@ const getStitchStatusMessage = (status: string, data: any) => {
                         <div className="absolute z-10 bg-indigo-600 p-2 rounded-full shadow-[0_0_15px_rgba(79,70,229,0.6)] group-hover:rotate-12 transition-transform border-2 border-zinc-950">
                           <ArrowRight className="w-4 h-4 text-white" />
                         </div>
-
+  
                         <div className="relative aspect-video w-full rounded-xl overflow-hidden border border-white/10 group-hover:scale-[1.02] transition-transform duration-500">
                           <img src={transition.frame_b_url} alt="Entry" className="w-full h-full object-cover" />
                           <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent" />
@@ -640,7 +816,7 @@ const getStitchStatusMessage = (status: string, data: any) => {
                         </div>
                       </div>
                     </div>
-
+  
                     {/* Actions */}
                     <div className="flex-1 p-8 space-y-6">
                       {!analysisResults.has(transition.id) && !transition.generated_video_path ? (
@@ -653,18 +829,9 @@ const getStitchStatusMessage = (status: string, data: any) => {
                             </h5>
                           </div>
                           
-                          {/* Debug info - remove after testing */}
-                          {process.env.NODE_ENV === 'development' && (
-                            <div className="bg-zinc-800 p-2 rounded text-xs font-mono text-zinc-400">
-                              Transition ID: {transition.id}<br/>
-                              Has Product: {productInputs.has(transition.id) ? 'Yes' : 'No'}<br/>
-                              Has Analysis: {analysisResults.has(transition.id) ? 'Yes' : 'No'}
-                            </div>
-                          )}
-                          
                           <ProductInput
                             key={transition.id}
-                            onSubmit={(product, mode) => handleProductSubmit(transition.id, product, mode)}  // ⬅️ ADD mode parameter
+                            onSubmit={(product, mode) => handleProductSubmit(transition.id, product, mode)}
                             isAnalyzing={analyzingProduct === transition.id}
                             imagePreview={imagePreviews.get(transition.id)}
                             onImageChange={(preview) => {
@@ -696,9 +863,9 @@ const getStitchStatusMessage = (status: string, data: any) => {
                             initialPrompt={analysisResults.get(transition.id)!.soraPrompt}
                             onGenerate={(prompt, duration) => handleGenerate(transition.id, prompt, duration)}
                             isGenerating={generating === transition.id}
-                            mode={analysisResults.get(transition.id)!.mode}  // ⬅️ ADD
+                            mode={analysisResults.get(transition.id)!.mode}
                           />
-
+  
                           {generating === transition.id && generationProgress[transition.id] !== undefined && (
                             <div className="space-y-2">
                               <div className="flex justify-between text-xs text-zinc-400">
@@ -730,12 +897,23 @@ const getStitchStatusMessage = (status: string, data: any) => {
                             </Badge>
                           </div>
                       
-                          <VideoPreview 
-                            videoUrl={transition.generated_video_path}
-                            title={`Transition ${idx + 1}`}
-                          />
+                          {/* Video Preview */}
+                          <div className="relative w-full rounded-lg overflow-hidden bg-zinc-950 border border-zinc-800">
+                            <video
+                              key={transition.generated_video_path}
+                              src={transition.generated_video_path}
+                              controls
+                              preload="metadata"
+                              className="w-full aspect-video object-contain"
+                            >
+                              Your browser does not support video playback.
+                            </video>
+                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
+                              <p className="text-xs text-white font-medium">Transition {idx + 1}</p>
+                            </div>
+                          </div>
                       
-                          {/* NEW: Selection Checkbox */}
+                          {/* Selection Checkbox */}
                           <div className="border-t border-zinc-800 pt-4">
                             <label className="flex items-center gap-3 cursor-pointer group">
                               <input
@@ -773,10 +951,10 @@ const getStitchStatusMessage = (status: string, data: any) => {
                 </CardContent>
               </Card>
             ))}
-
+  
             {/* Final Video Section - Show when ANY transitions are complete */}
             {transitions.some(t => t.generated_video_path) && (
-              <Card className="bg-gradient-to-br from-indigo-900/20 to-purple-900/20 border-indigo-500/30 backdrop-blur-sm overflow-hidden mt-8">
+              <Card className="bg-linear-to-br from-indigo-900/20 to-purple-900/20 border-indigo-500/30 backdrop-blur-sm overflow-hidden mt-8">
                 <CardContent className="p-8 sm:p-12">
                   <div className="text-center space-y-6">
                     {/* Status Badge */}
@@ -786,7 +964,7 @@ const getStitchStatusMessage = (status: string, data: any) => {
                         {selectedTransitions.size} Ad{selectedTransitions.size !== 1 ? 's' : ''} Selected
                       </span>
                     </div>
-
+  
                     <div className="space-y-2">
                       <h3 className="text-2xl sm:text-3xl font-bold text-white">
                         Create Final Video
@@ -795,7 +973,7 @@ const getStitchStatusMessage = (status: string, data: any) => {
                         Selected ads will be stitched into your original video at the transition points.
                       </p>
                     </div>
-
+  
                     {/* Selection Summary */}
                     {selectedTransitions.size > 0 && (
                       <div className="flex flex-wrap gap-2 justify-center">
@@ -814,14 +992,14 @@ const getStitchStatusMessage = (status: string, data: any) => {
                           })}
                       </div>
                     )}
-
+  
                     {/* Stitch Button / Progress / Final Video */}
                     {!stitching && !finalVideoUrl ? (
                       <Button
                         onClick={stitchFinalVideo}
                         disabled={selectedTransitions.size === 0}
                         size="lg"
-                        className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold px-12 h-14 rounded-xl shadow-[0_0_30px_rgba(34,197,94,0.3)] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                        className="bg-linear-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold px-12 h-14 rounded-xl shadow-[0_0_30px_rgba(34,197,94,0.3)] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                       >
                         <Sparkles className="w-5 h-5 mr-2 fill-current" />
                         Stitch {selectedTransitions.size} Ad{selectedTransitions.size !== 1 ? 's' : ''} into Video
@@ -849,16 +1027,44 @@ const getStitchStatusMessage = (status: string, data: any) => {
                           <CheckCircle2 className="w-4 h-4 mr-2 inline" />
                           Final Video Ready
                         </Badge>
+  
+                        {/* Final Video Player */}
                         <div className="max-w-4xl mx-auto">
-                          <VideoPreview 
-                            videoUrl={finalVideoUrl}
-                            title="Final Video with Ads"
-                          />
+                          {finalVideoPlaybackId ? (
+                            <MuxPlayerWithMarkers
+                              playbackId={finalVideoPlaybackId}
+                              title={aiSummary?.title || 'Final Video with Ads'}
+                              chapters={aiChapters}
+                              adMarkers={transitions
+                                .filter(t => selectedTransitions.has(t.id))
+                                .map(t => ({
+                                  time: t.frame_a_time,
+                                  duration: t.ad_duration || 5,  // ⬅️ USE ACTUAL DURATION (fallback to 5)
+                                  label: `Ad at ${formatTimeSimple(t.frame_a_time)}`,
+                                }))}
+                              thumbnailTime={0}
+                              accentColor="#FFD700"
+                            />
+                          ) : (
+                            <div className="relative w-full rounded-lg overflow-hidden bg-zinc-950 border border-zinc-800">
+                              <video
+                                key={finalVideoUrl}
+                                src={finalVideoUrl}
+                                controls
+                                preload="metadata"
+                                className="w-full aspect-video object-contain"
+                              >
+                                Your browser does not support video playback.
+                              </video>
+                            </div>
+                          )}
                         </div>
-                        <div className="flex gap-3 justify-center">
+  
+                        {/* Action Buttons */}
+                        <div className="flex gap-3 justify-center flex-wrap">
+                          {/* Download Button */}
                           <Button
                             onClick={() => {
-                              // Create download link
                               const link = document.createElement('a');
                               link.href = finalVideoUrl;
                               link.download = `final_video_${project.id}.mp4`;
@@ -870,12 +1076,45 @@ const getStitchStatusMessage = (status: string, data: any) => {
                           >
                             Download Video
                           </Button>
+  
+                          {/* Upload to Mux Button */}
+                          {!finalVideoMuxAssetId ? (
+                            <Button
+                              onClick={uploadFinalVideoToMux}
+                              disabled={uploadingToMux}
+                              className="bg-purple-600 hover:bg-purple-500"
+                            >
+                              {uploadingToMux ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                  Uploading to Mux...
+                                </>
+                              ) : (
+                                <>
+                                  <Sparkles className="w-4 h-4 mr-2" />
+                                  Upload to Mux
+                                </>
+                              )}
+                            </Button>
+                          ) : (
+                            <Badge className="bg-green-500/20 text-green-400 border-green-500/30 px-4 py-2">
+                              <CheckCircle2 className="w-4 h-4 mr-2 inline" />
+                              Uploaded to Mux
+                            </Badge>
+                          )}
+  
+                          {/* Create Different Version */}
                           <Button
                             onClick={() => {
                               setFinalVideoUrl(null);
+                              setFinalVideoFilePath(null);
                               setStitchProgress(0);
                               setStitchStatus('');
-                              // Re-select all completed transitions
+                              setFinalVideoMuxAssetId(null);
+                              setFinalVideoPlaybackId(null);
+                              setShowAiResults(false);
+                              setAiChapters([]);
+                              setAiSummary(null);
                               setSelectedTransitions(new Set(
                                 transitions
                                   .filter(t => t.generated_video_path)
@@ -888,6 +1127,138 @@ const getStitchStatusMessage = (status: string, data: any) => {
                             Create Different Version
                           </Button>
                         </div>
+  
+                        {/* AI Features Section - Only shows after Mux upload */}
+                        {finalVideoMuxAssetId && (
+                          <div className="mt-8 pt-8 border-t border-zinc-700">
+                            <div className="space-y-6">
+                              {/* Header */}
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+                                    🤖 AI Features
+                                  </h3>
+                                  <p className="text-sm text-zinc-400">
+                                    Generate AI-powered chapters and summary for your final video
+                                  </p>
+                                  <p className="text-xs text-zinc-500 mt-1">
+                                    💡 Wait 2-3 minutes for captions to generate
+                                  </p>
+                                </div>
+  
+                                <Button
+                                  onClick={generateAIFeatures}
+                                  disabled={generatingAI}
+                                  className={`${
+                                    generatingAI
+                                      ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
+                                      : 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600'
+                                  }`}
+                                >
+                                  {generatingAI ? (
+                                    <>
+                                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                      Generating...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Sparkles className="w-4 h-4 mr-2" />
+                                      Generate AI Features
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
+  
+                              {/* Progress Indicator */}
+                              {generatingAI && (
+                                <div className="p-4 bg-zinc-800/50 rounded-lg border border-zinc-700">
+                                  <div className="flex items-center gap-3">
+                                    <Loader2 className="w-5 h-5 text-purple-500 animate-spin" />
+                                    <span className="text-zinc-300">{aiProgress.message}</span>
+                                  </div>
+                                </div>
+                              )}
+  
+                              {/* Error Message */}
+                              {aiProgress.step === 'error' && (
+                                <div className="p-4 bg-red-500/10 rounded-lg border border-red-500/20">
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-2xl">⚠️</span>
+                                    <div>
+                                      <p className="text-red-400 font-semibold">Error</p>
+                                      <p className="text-red-300 text-sm">{aiProgress.message}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+  
+                              {/* Results Display */}
+                              {showAiResults && aiProgress.step === 'complete' && (
+                                <div className="space-y-4">
+                                  {/* AI Chapters */}
+                                  {aiChapters.length > 0 && (
+                                    <div className="bg-zinc-800/50 rounded-lg border border-zinc-700 p-4">
+                                      <h4 className="text-lg font-bold text-white mb-3 flex items-center gap-2">
+                                        📚 AI Chapters ({aiChapters.length})
+                                      </h4>
+                                      <div className="space-y-2">
+                                        {aiChapters.map((chapter, idx) => (
+                                          <div
+                                            key={idx}
+                                            className="flex items-start gap-3 p-2 bg-zinc-900/50 rounded border border-zinc-700/50 hover:border-purple-500/30 transition-colors"
+                                          >
+                                            <span className="text-purple-400 font-mono text-xs mt-0.5">
+                                              {Math.floor(chapter.startTime / 60)}:{String(chapter.startTime % 60).padStart(2, '0')}
+                                            </span>
+                                            <span className="text-zinc-200 text-sm flex-1">{chapter.title}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+  
+                                  {/* AI Summary */}
+                                  {aiSummary && (
+                                    <div className="bg-zinc-800/50 rounded-lg border border-zinc-700 p-4">
+                                      <h4 className="text-lg font-bold text-white mb-3 flex items-center gap-2">
+                                        📝 AI Summary
+                                      </h4>
+                                      
+                                      <div className="space-y-3">
+                                        {/* Title */}
+                                        <div>
+                                          <p className="text-xs text-zinc-400 mb-1">Title</p>
+                                          <p className="text-base font-semibold text-white">{aiSummary.title}</p>
+                                        </div>
+  
+                                        {/* Description */}
+                                        <div>
+                                          <p className="text-xs text-zinc-400 mb-1">Description</p>
+                                          <p className="text-sm text-zinc-200 leading-relaxed">{aiSummary.description}</p>
+                                        </div>
+  
+                                        {/* Tags */}
+                                        <div>
+                                          <p className="text-xs text-zinc-400 mb-2">Tags</p>
+                                          <div className="flex flex-wrap gap-2">
+                                            {aiSummary.tags.map((tag, idx) => (
+                                              <span
+                                                key={idx}
+                                                className="px-2 py-0.5 bg-purple-500/20 text-purple-300 rounded-full text-xs border border-purple-500/30"
+                                              >
+                                                {tag}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ) : null}
                   </div>
@@ -913,4 +1284,10 @@ function formatTimeSimple(seconds: number) {
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
+function formatTimeForMarker(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
 }

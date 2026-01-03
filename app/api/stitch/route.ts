@@ -3,7 +3,7 @@ import path from "path";
 import fs from "fs";
 import {
   ensureDirectories,
-  downloadFromHLS, // ⬅️ CHANGED: Use HLS download instead
+  downloadFromHLS,
   getVideoDuration,
   clipVideo,
   buildSegmentPlan,
@@ -255,16 +255,18 @@ async function stitchVideoAsync(
     // Cleanup temporary files (keep final video and ads)
     cleanupFiles(tempFiles);
 
-    // Update progress: Completed
+    // ✅ UPDATED: Return both URL and file path
     const finalVideoFilename = path.basename(finalVideoPath);
     await updateStitchProgress(projectId, {
       status: "completed",
       progress: 100,
-      videoPath: `/api/video/${finalVideoFilename}`,
+      videoUrl: `/api/video/${finalVideoFilename}`, // ⬅️ For display
+      videoPath: finalVideoPath, // ⬅️ For Mux upload (actual file path)
     });
 
     console.log("🎉 Stitching complete!");
-    console.log(`   Final video: /api/video/${finalVideoFilename}`);
+    console.log(`   Video URL: /api/video/${finalVideoFilename}`);
+    console.log(`   File path: ${finalVideoPath}`);
     console.log(`   Segments used: ${segmentPlan.length}`);
     console.log(`   Ads included: ${selectedTransitions.length}`);
   } catch (error: any) {
