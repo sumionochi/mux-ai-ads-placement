@@ -2,7 +2,7 @@
 
 import MuxPlayer from '@mux/mux-player-react';
 import type MuxPlayerElement from '@mux/mux-player';
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 
 interface Chapter {
   startTime: number;
@@ -16,28 +16,28 @@ interface AdMarker {
 }
 
 interface MuxPlayerWithMarkersProps {
-    playbackId: string;
-    title?: string;
-    chapters?: Chapter[];
-    adMarkers?: AdMarker[];
-    thumbnailTime?: number;
-    accentColor?: string;
-    availableLanguages?: Array<{  // ⬅️ ADD THIS
-      code: string;
-      name: string;
-      vttContent?: string;
-    }>;
-  }
-  
-  export function MuxPlayerWithMarkers({
-    playbackId,
-    title,
-    chapters = [],
-    adMarkers = [],
-    thumbnailTime = 0,
-    accentColor = '#6366F1',
-    availableLanguages = [],  // ⬅️ ADD THIS
-  }: MuxPlayerWithMarkersProps) {
+  playbackId: string;
+  title?: string;
+  chapters?: Chapter[];
+  adMarkers?: AdMarker[];
+  thumbnailTime?: number;
+  accentColor?: string;
+  availableLanguages?: Array<{
+    code: string;
+    name: string;
+    vttContent?: string;
+  }>;
+}
+
+export function MuxPlayerWithMarkers({
+  playbackId,
+  title,
+  chapters = [],
+  adMarkers = [],
+  thumbnailTime = 0,
+  accentColor = '#6366F1',
+  availableLanguages = [],
+}: MuxPlayerWithMarkersProps) {
   const playerRef = useRef<MuxPlayerElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [duration, setDuration] = useState(0);
@@ -61,8 +61,9 @@ interface MuxPlayerWithMarkersProps {
           value: ch.title,
         }))
       );
+      console.log(`✅ Added ${chapters.length} chapters`);
     }
-  
+
     // Add ad markers
     if (adMarkers.length > 0) {
       player.addCuePoints(
@@ -76,26 +77,63 @@ interface MuxPlayerWithMarkersProps {
           },
         }))
       );
+      
+      // Debug: Log ad marker positions
+      console.log('📊 Ad markers with durations:');
+      adMarkers.forEach((marker, idx) => {
+        const leftPercent = (marker.time / duration) * 100;
+        const widthPercent = (marker.duration / duration) * 100;
+        console.log(`  Ad ${idx + 1}: ${marker.duration}s at ${marker.time}s (${leftPercent.toFixed(1)}% - ${widthPercent.toFixed(2)}% width)`);
+      });
     }
-  
-    // ✅ NEW: Load translated captions as additional tracks
+  };
+
+  // ✅ NEW: Add translated captions as <track> elements
+  useEffect(() => {
+    if (!playerRef.current) return;
+    
+    const player = playerRef.current;
+    const videoEl = player.media?.nativeEl;
+    
+    if (!videoEl || availableLanguages.length <= 1) return;
+
+    console.log('🌍 Adding translated caption tracks...');
+
+    // Add each translated language as a track
     availableLanguages.forEach((lang) => {
       if (lang.vttContent && lang.code !== 'en') {
-        // Create a blob URL for the VTT content
+        // Create blob URL from VTT content
         const blob = new Blob([lang.vttContent], { type: 'text/vtt' });
         const blobUrl = URL.createObjectURL(blob);
         
-        // Add as a text track
-        const video = player.media?.nativeEl;
-        if (video) {
-          const track = video.addTextTrack('subtitles', lang.name, lang.code);
-          track.mode = 'hidden'; // Will be shown when user selects it
-          
-          console.log(`✅ Added ${lang.name} captions`);
-        }
+        // Create track element
+        const track = document.createElement('track');
+        track.kind = 'subtitles';
+        track.label = lang.name;
+        track.srclang = lang.code;
+        track.src = blobUrl;
+        
+        // Add to video element
+        videoEl.appendChild(track);
+        
+        console.log(`✅ Added ${lang.name} captions (${lang.code})`);
       }
     });
-  };
+
+    // Cleanup blob URLs on unmount
+    return () => {
+      availableLanguages.forEach((lang) => {
+        if (lang.vttContent && lang.code !== 'en') {
+          const tracks = videoEl.querySelectorAll('track');
+          tracks.forEach(track => {
+            if (track.src.startsWith('blob:')) {
+              URL.revokeObjectURL(track.src);
+            }
+          });
+        }
+      });
+    };
+  }, [availableLanguages, playbackId]);
 
   const handleCuePointChange = (event: any) => {
     const activeCuePoint = event.detail;
@@ -132,10 +170,10 @@ interface MuxPlayerWithMarkersProps {
         }}
       />
       
-      {/* Visual Ad Markers Overlay - Shows on hover with fade transition */}
+      {/* Visual Ad Markers Overlay */}
       {duration > 0 && adMarkers.length > 0 && (
         <div 
-          className={`absolute bottom-13 left-3 right-3 h-1 pointer-events-none z-100 transition-opacity duration-300 ${
+          className={`absolute bottom-[52px] left-3 right-3 h-1 pointer-events-none z-[100] transition-opacity duration-300 ${
             isHovering ? 'opacity-100' : 'opacity-0'
           }`}
         >
