@@ -16,22 +16,28 @@ interface AdMarker {
 }
 
 interface MuxPlayerWithMarkersProps {
-  playbackId: string;
-  title?: string;
-  chapters?: Chapter[];
-  adMarkers?: AdMarker[];
-  thumbnailTime?: number;
-  accentColor?: string;
-}
-
-export function MuxPlayerWithMarkers({
-  playbackId,
-  title,
-  chapters = [],
-  adMarkers = [],
-  thumbnailTime = 0,
-  accentColor = '#6366F1',
-}: MuxPlayerWithMarkersProps) {
+    playbackId: string;
+    title?: string;
+    chapters?: Chapter[];
+    adMarkers?: AdMarker[];
+    thumbnailTime?: number;
+    accentColor?: string;
+    availableLanguages?: Array<{  // ⬅️ ADD THIS
+      code: string;
+      name: string;
+      vttContent?: string;
+    }>;
+  }
+  
+  export function MuxPlayerWithMarkers({
+    playbackId,
+    title,
+    chapters = [],
+    adMarkers = [],
+    thumbnailTime = 0,
+    accentColor = '#6366F1',
+    availableLanguages = [],  // ⬅️ ADD THIS
+  }: MuxPlayerWithMarkersProps) {
   const playerRef = useRef<MuxPlayerElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [duration, setDuration] = useState(0);
@@ -45,10 +51,9 @@ export function MuxPlayerWithMarkers({
     
     console.log('✅ Mux Player ready');
     console.log(`   Duration: ${player.duration}s`);
-    console.log(`   Ad markers: ${adMarkers.length}`);
-    console.log(`   Chapters: ${chapters.length}`);
+    console.log(`   Available languages: ${availableLanguages.length}`);
     
-    // Add chapters if available
+    // Add chapters
     if (chapters.length > 0) {
       player.addChapters(
         chapters.map(ch => ({
@@ -56,10 +61,9 @@ export function MuxPlayerWithMarkers({
           value: ch.title,
         }))
       );
-      console.log(`✅ Added ${chapters.length} chapters to Mux Player`);
     }
-
-    // Add CuePoints for event tracking
+  
+    // Add ad markers
     if (adMarkers.length > 0) {
       player.addCuePoints(
         adMarkers.map(marker => ({
@@ -72,15 +76,25 @@ export function MuxPlayerWithMarkers({
           },
         }))
       );
-      
-      // Debug: Log ad marker positions
-      console.log('📊 Ad markers with durations:');
-      adMarkers.forEach((marker, idx) => {
-        const leftPercent = (marker.time / duration) * 100;
-        const widthPercent = (marker.duration / duration) * 100;
-        console.log(`  Ad ${idx + 1}: ${marker.duration}s at ${marker.time}s (${leftPercent.toFixed(1)}% - ${widthPercent.toFixed(2)}% width)`);
-      });
     }
+  
+    // ✅ NEW: Load translated captions as additional tracks
+    availableLanguages.forEach((lang) => {
+      if (lang.vttContent && lang.code !== 'en') {
+        // Create a blob URL for the VTT content
+        const blob = new Blob([lang.vttContent], { type: 'text/vtt' });
+        const blobUrl = URL.createObjectURL(blob);
+        
+        // Add as a text track
+        const video = player.media?.nativeEl;
+        if (video) {
+          const track = video.addTextTrack('subtitles', lang.name, lang.code);
+          track.mode = 'hidden'; // Will be shown when user selects it
+          
+          console.log(`✅ Added ${lang.name} captions`);
+        }
+      }
+    });
   };
 
   const handleCuePointChange = (event: any) => {

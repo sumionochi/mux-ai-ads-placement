@@ -69,6 +69,16 @@ export default function ReviewPage() {
     tags: string[];
   } | null>(null);
   const [showAiResults, setShowAiResults] = useState(false);
+  // Multi-language states
+  const [translatingCaptions, setTranslatingCaptions] = useState(false);
+  const [translationProgress, setTranslationProgress] = useState(0);
+  const [availableLanguages, setAvailableLanguages] = useState<Array<{
+    code: string;
+    name: string;
+    vttContent?: string;
+  }>>([
+    { code: 'en', name: 'English' },
+  ]);
 
   // Auto-select all completed transitions when they're ready
 useEffect(() => {
@@ -523,6 +533,60 @@ const getStitchStatusMessage = (status: string, data: any) => {
   return messages[status] || 'Processing...';
 };
 
+const translateCaptions = async () => {
+  if (!finalVideoMuxAssetId) {
+    alert('Please upload video to Mux first');
+    return;
+  }
+
+  setTranslatingCaptions(true);
+  setTranslationProgress(10);
+
+  try {
+    console.log('🌍 Starting caption translation...');
+
+    const response = await fetch('/api/mux/translate-captions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        assetId: finalVideoMuxAssetId,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Translation failed');
+    }
+
+    setTranslationProgress(100);
+
+    // Store translated captions
+    const languages = [
+      { code: 'en', name: 'English' },
+      ...data.translations
+        .filter((t: any) => t.status === 'completed')
+        .map((t: any) => ({
+          code: t.language,
+          name: t.name,
+          vttContent: t.content,
+        })),
+    ];
+
+    setAvailableLanguages(languages);
+
+    console.log(`✅ Translated to ${data.translations.length} languages`);
+    alert(`✅ Captions translated to ${data.translations.filter((t: any) => t.status === 'completed').length} languages!`);
+
+  } catch (error: any) {
+    console.error('❌ Translation failed:', error);
+    alert('Translation failed: ' + error.message);
+  } finally {
+    setTranslatingCaptions(false);
+    setTranslationProgress(0);
+  }
+};
+
   const resetTransition = (transitionId: string) => {
     // Clean up preview URL
     const preview = imagePreviews.get(transitionId);
@@ -736,8 +800,8 @@ const getStitchStatusMessage = (status: string, data: any) => {
             <div className="bg-linear-to-tr from-indigo-600 to-blue-500 p-1.5 rounded-lg">
               <Video className="w-4 h-4 text-white" />
             </div>
-            <h1 className="text-lg font-bold bg-linear-to-r from-white to-zinc-500 bg-clip-text text-transparent">
-              VISUAL-FIRST AD STUDIO
+            <h1 className="text-xl font-bold tracking-tight bg-linear-to-r from-white to-zinc-400 bg-clip-text text-transparent">
+              Mux AI Ads Placement
             </h1>
           </div>
           <Badge variant="outline" className="bg-zinc-900 border-zinc-800 text-[10px] uppercase tracking-tighter text-zinc-400">
@@ -1044,6 +1108,7 @@ const getStitchStatusMessage = (status: string, data: any) => {
                                 }))}
                               thumbnailTime={0}
                               accentColor="#FFD700"
+                              availableLanguages={availableLanguages}
                             />
                           ) : (
                             <div className="relative w-full rounded-lg overflow-hidden bg-zinc-950 border border-zinc-800">
@@ -1167,6 +1232,67 @@ const getStitchStatusMessage = (status: string, data: any) => {
                                     </>
                                   )}
                                 </Button>
+
+                                {/* Translation Section */}
+                                {finalVideoMuxAssetId && aiProgress.step === 'complete' && (
+                                  <div className="mt-6 pt-6 border-t border-zinc-700">
+                                    <div className="flex items-center justify-between">
+                                      <div>
+                                        <h4 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                                          🌍 Multi-Language Captions
+                                        </h4>
+                                        <p className="text-sm text-zinc-400">
+                                          Translate captions to 5 languages (Spanish, French, German, Japanese, Hindi)
+                                        </p>
+                                        {availableLanguages.length > 1 && (
+                                          <p className="text-xs text-green-400 mt-1">
+                                            ✅ Available in {availableLanguages.length} languages
+                                          </p>
+                                        )}
+                                      </div>
+
+                                      {availableLanguages.length === 1 ? (
+                                        <Button
+                                          onClick={translateCaptions}
+                                          disabled={translatingCaptions}
+                                          className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600"
+                                        >
+                                          {translatingCaptions ? (
+                                            <>
+                                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                              Translating...
+                                            </>
+                                          ) : (
+                                            <>
+                                              🌍 Translate Captions
+                                            </>
+                                          )}
+                                        </Button>
+                                      ) : (
+                                        <div className="flex flex-wrap gap-2">
+                                          {availableLanguages.map((lang) => (
+                                            <Badge
+                                              key={lang.code}
+                                              className="bg-blue-500/20 text-blue-300 border-blue-500/30"
+                                            >
+                                              {lang.name}
+                                            </Badge>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Translation Progress */}
+                                    {translatingCaptions && (
+                                      <div className="mt-4">
+                                        <Progress value={translationProgress} className="h-2" />
+                                        <p className="text-xs text-zinc-500 text-center mt-2">
+                                          Translating captions to 5 languages...
+                                        </p>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                               </div>
   
                               {/* Progress Indicator */}
