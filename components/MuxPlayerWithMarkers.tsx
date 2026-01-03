@@ -135,7 +135,7 @@ interface MuxPlayerWithMarkersProps {
       {/* Visual Ad Markers Overlay - Shows on hover with fade transition */}
       {duration > 0 && adMarkers.length > 0 && (
         <div 
-          className={`absolute bottom-[52px] left-3 right-3 h-1 pointer-events-none z-[100] transition-opacity duration-300 ${
+          className={`absolute bottom-13 left-3 right-3 h-1 pointer-events-none z-100 transition-opacity duration-300 ${
             isHovering ? 'opacity-100' : 'opacity-0'
           }`}
         >

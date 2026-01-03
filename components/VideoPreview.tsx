@@ -42,7 +42,7 @@ export function VideoPreview({ videoUrl, title, playbackId }: VideoPreviewProps)
       </video>
       
       {title && (
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
+        <div className="absolute bottom-0 left-0 right-0 bg-linear-to-t from-black/80 to-transparent p-4">
           <p className="text-sm text-white font-medium">{title}</p>
         </div>
       )}

@@ -972,7 +972,7 @@ const translateCaptions = async () => {
                             >
                               Your browser does not support video playback.
                             </video>
-                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
+                            <div className="absolute bottom-0 left-0 right-0 bg-linear-to-t from-black/80 to-transparent p-3">
                               <p className="text-xs text-white font-medium">Transition {idx + 1}</p>
                             </div>
                           </div>
@@ -1086,44 +1086,11 @@ const translateCaptions = async () => {
                       </div>
                     ) : finalVideoUrl ? (
                       // Final Video Preview
-                      <div className="space-y-4">
+                      <div className="space-y-6">
                         <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-sm px-4 py-2">
                           <CheckCircle2 className="w-4 h-4 mr-2 inline" />
                           Final Video Ready
                         </Badge>
-  
-                        {/* Final Video Player */}
-                        <div className="max-w-4xl mx-auto">
-                          {finalVideoPlaybackId ? (
-                            <MuxPlayerWithMarkers
-                              playbackId={finalVideoPlaybackId}
-                              title={aiSummary?.title || 'Final Video with Ads'}
-                              chapters={aiChapters}
-                              adMarkers={transitions
-                                .filter(t => selectedTransitions.has(t.id))
-                                .map(t => ({
-                                  time: t.frame_a_time,
-                                  duration: t.ad_duration || 5,  // ⬅️ USE ACTUAL DURATION (fallback to 5)
-                                  label: `Ad at ${formatTimeSimple(t.frame_a_time)}`,
-                                }))}
-                              thumbnailTime={0}
-                              accentColor="#FFD700"
-                              availableLanguages={availableLanguages}
-                            />
-                          ) : (
-                            <div className="relative w-full rounded-lg overflow-hidden bg-zinc-950 border border-zinc-800">
-                              <video
-                                key={finalVideoUrl}
-                                src={finalVideoUrl}
-                                controls
-                                preload="metadata"
-                                className="w-full aspect-video object-contain"
-                              >
-                                Your browser does not support video playback.
-                              </video>
-                            </div>
-                          )}
-                        </div>
   
                         {/* Action Buttons */}
                         <div className="flex gap-3 justify-center flex-wrap">
@@ -1193,6 +1160,134 @@ const translateCaptions = async () => {
                           </Button>
                         </div>
   
+                        {/* ✅ NEW: Mux Asset Info Display */}
+                        {finalVideoMuxAssetId && (
+                          <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-5">
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1 space-y-3">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">
+                                    Mux Asset Info
+                                  </span>
+                                  <Badge className="bg-green-500/20 text-green-300 border-green-500/30 text-xs">
+                                    Uploaded
+                                  </Badge>
+                                </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  {/* Asset ID */}
+                                  <div className="space-y-1">
+                                    <label className="text-xs text-zinc-500 font-medium">Asset ID</label>
+                                    <div className="flex items-center gap-2 bg-zinc-900/50 rounded px-3 py-2 border border-zinc-700/50">
+                                      <code className="text-sm text-zinc-300 font-mono flex-1 truncate">
+                                        {finalVideoMuxAssetId}
+                                      </code>
+                                      <button
+                                        onClick={() => {
+                                          navigator.clipboard.writeText(finalVideoMuxAssetId || '');
+                                          alert('Asset ID copied!');
+                                        }}
+                                        className="text-zinc-400 hover:text-zinc-200 transition-colors shrink-0"
+                                        title="Copy Asset ID"
+                                      >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                        </svg>
+                                      </button>
+                                    </div>
+                                  </div>
+  
+                                  {/* Playback ID */}
+                                  <div className="space-y-1">
+                                    <label className="text-xs text-zinc-500 font-medium">Playback ID</label>
+                                    <div className="flex items-center gap-2 bg-zinc-900/50 rounded px-3 py-2 border border-zinc-700/50">
+                                      <code className="text-sm text-zinc-300 font-mono flex-1 truncate">
+                                        {finalVideoPlaybackId || 'Loading...'}
+                                      </code>
+                                      {finalVideoPlaybackId && (
+                                        <button
+                                          onClick={() => {
+                                            navigator.clipboard.writeText(finalVideoPlaybackId || '');
+                                            alert('Playback ID copied!');
+                                          }}
+                                          className="text-zinc-400 hover:text-zinc-200 transition-colors shrink-0"
+                                          title="Copy Playback ID"
+                                        >
+                                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                          </svg>
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+  
+                                {/* Quick Links */}
+                                <div className="flex items-center gap-4 pt-1">
+                                  <a
+                                    href={`https://dashboard.mux.com/video/assets/${finalVideoMuxAssetId}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors"
+                                  >
+                                    View in Mux Dashboard
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                    </svg>
+                                  </a>
+                                  
+                                  {finalVideoPlaybackId && (
+                                    <a
+                                      href={`https://stream.mux.com/${finalVideoPlaybackId}.m3u8`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors"
+                                    >
+                                      View HLS Manifest
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                      </svg>
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+  
+                        {/* Final Video Player */}
+                        <div className="max-w-4xl mx-auto">
+                          {finalVideoPlaybackId ? (
+                            <MuxPlayerWithMarkers
+                              playbackId={finalVideoPlaybackId}
+                              title={aiSummary?.title || 'Final Video with Ads'}
+                              chapters={aiChapters}
+                              adMarkers={transitions
+                                .filter(t => selectedTransitions.has(t.id))
+                                .map(t => ({
+                                  time: t.frame_a_time,
+                                  duration: t.ad_duration || 5,
+                                  label: `Ad at ${formatTimeSimple(t.frame_a_time)}`,
+                                }))}
+                              thumbnailTime={0}
+                              accentColor="#FFD700"
+                              availableLanguages={availableLanguages}
+                            />
+                          ) : (
+                            <div className="relative w-full rounded-lg overflow-hidden bg-zinc-950 border border-zinc-800">
+                              <video
+                                key={finalVideoUrl}
+                                src={finalVideoUrl}
+                                controls
+                                preload="metadata"
+                                className="w-full aspect-video object-contain"
+                              >
+                                Your browser does not support video playback.
+                              </video>
+                            </div>
+                          )}
+                        </div>
+  
                         {/* AI Features Section - Only shows after Mux upload */}
                         {finalVideoMuxAssetId && (
                           <div className="mt-8 pt-8 border-t border-zinc-700">
@@ -1217,7 +1312,7 @@ const translateCaptions = async () => {
                                   className={`${
                                     generatingAI
                                       ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
-                                      : 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600'
+                                      : 'bg-linear-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600'
                                   }`}
                                 >
                                   {generatingAI ? (
@@ -1232,67 +1327,6 @@ const translateCaptions = async () => {
                                     </>
                                   )}
                                 </Button>
-
-                                {/* Translation Section */}
-                                {finalVideoMuxAssetId && aiProgress.step === 'complete' && (
-                                  <div className="mt-6 pt-6 border-t border-zinc-700">
-                                    <div className="flex items-center justify-between">
-                                      <div>
-                                        <h4 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
-                                          🌍 Multi-Language Captions
-                                        </h4>
-                                        <p className="text-sm text-zinc-400">
-                                          Translate captions to 5 languages (Spanish, French, German, Japanese, Hindi)
-                                        </p>
-                                        {availableLanguages.length > 1 && (
-                                          <p className="text-xs text-green-400 mt-1">
-                                            ✅ Available in {availableLanguages.length} languages
-                                          </p>
-                                        )}
-                                      </div>
-
-                                      {availableLanguages.length === 1 ? (
-                                        <Button
-                                          onClick={translateCaptions}
-                                          disabled={translatingCaptions}
-                                          className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600"
-                                        >
-                                          {translatingCaptions ? (
-                                            <>
-                                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                              Translating...
-                                            </>
-                                          ) : (
-                                            <>
-                                              🌍 Translate Captions
-                                            </>
-                                          )}
-                                        </Button>
-                                      ) : (
-                                        <div className="flex flex-wrap gap-2">
-                                          {availableLanguages.map((lang) => (
-                                            <Badge
-                                              key={lang.code}
-                                              className="bg-blue-500/20 text-blue-300 border-blue-500/30"
-                                            >
-                                              {lang.name}
-                                            </Badge>
-                                          ))}
-                                        </div>
-                                      )}
-                                    </div>
-
-                                    {/* Translation Progress */}
-                                    {translatingCaptions && (
-                                      <div className="mt-4">
-                                        <Progress value={translationProgress} className="h-2" />
-                                        <p className="text-xs text-zinc-500 text-center mt-2">
-                                          Translating captions to 5 languages...
-                                        </p>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
                               </div>
   
                               {/* Progress Indicator */}
@@ -1378,6 +1412,67 @@ const translateCaptions = async () => {
                                           </div>
                                         </div>
                                       </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+  
+                              {/* Translation Section */}
+                              {aiProgress.step === 'complete' && (
+                                <div className="mt-6 pt-6 border-t border-zinc-700">
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <h4 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                                        🌍 Multi-Language Captions
+                                      </h4>
+                                      <p className="text-sm text-zinc-400">
+                                        Translate captions to 5 languages (Spanish, French, German, Japanese, Hindi)
+                                      </p>
+                                      {availableLanguages.length > 1 && (
+                                        <p className="text-xs text-green-400 mt-1">
+                                          ✅ Available in {availableLanguages.length} languages
+                                        </p>
+                                      )}
+                                    </div>
+  
+                                    {availableLanguages.length === 1 ? (
+                                      <Button
+                                        onClick={translateCaptions}
+                                        disabled={translatingCaptions}
+                                        className="bg-linear-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600"
+                                      >
+                                        {translatingCaptions ? (
+                                          <>
+                                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                            Translating...
+                                          </>
+                                        ) : (
+                                          <>
+                                            🌍 Translate Captions
+                                          </>
+                                        )}
+                                      </Button>
+                                    ) : (
+                                      <div className="flex flex-wrap gap-2">
+                                        {availableLanguages.map((lang) => (
+                                          <Badge
+                                            key={lang.code}
+                                            className="bg-blue-500/20 text-blue-300 border-blue-500/30"
+                                          >
+                                            {lang.name}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+  
+                                  {/* Translation Progress */}
+                                  {translatingCaptions && (
+                                    <div className="mt-4">
+                                      <Progress value={translationProgress} className="h-2" />
+                                      <p className="text-xs text-zinc-500 text-center mt-2">
+                                        Translating captions to 5 languages...
+                                      </p>
                                     </div>
                                   )}
                                 </div>
