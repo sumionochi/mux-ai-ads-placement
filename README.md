@@ -7,6 +7,10 @@
 [![Next.js](https://img.shields.io/badge/Built%20with-Next.js%2016-000000?style=for-the-badge&logo=next.js)](https://nextjs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
 
+[Github Repo Link](https://github.com/sumionochi/mux-ai-ads-placement)
+
+[1 min Demo Video on Mux](https://player.mux.com/uOrQlsBrrPFSOSBV00Wst3BJIiGiZ3HCP02l00itrP58dk)
+
 ---
 
 ## 🎯 **Overview**
@@ -20,6 +24,9 @@
 ---
 
 ## 🎬 **The Problem**
+
+![Problems](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/7y3mxvq0wdlvkj6a70nk.png)
+
 
 Traditional video advertising faces critical challenges:
 
@@ -42,11 +49,112 @@ Traditional video advertising faces critical challenges:
 
 **Mux AI Ads Placement** leverages cutting-edge AI to create a **fully automated, intelligent ad integration pipeline**:
 
+
+![Solution](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/ecefucsw0tvl5e3b9vf6.png)
+
 ```
 Original Video → AI Scene Analysis → Smart Ad Placement → Contextual Ad Generation → Seamless Stitching
 ```
+---
 
-Here's the section to add **right before "### Key Innovation:"** (after the solution diagram):
+## 🚀 **Getting Started**
+
+### **Prerequisites**
+
+```bash
+# Required software
+Node.js >= 20.0.0
+npm >= 10.0.0
+FFmpeg >= 4.4
+
+# Check versions
+node --version
+npm --version
+ffmpeg -version
+```
+
+### **Installation**
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/yourusername/mux-ai-ads-placement.git
+cd mux-ai-ads-placement
+
+# 2. Install dependencies
+npm install
+
+# 3. Set up environment variables
+cp .env.example .env.local
+```
+
+### **Environment Variables**
+
+Create `.env.local` with the following:
+
+```bash
+# Mux Configuration (Required)
+MUX_TOKEN_ID=your_mux_token_id
+MUX_TOKEN_SECRET=your_mux_token_secret
+
+# OpenAI Configuration (Required)
+OPENAI_API_KEY=your_openai_api_key
+
+# Wan API Configuration (Required for video generation)
+WAVESPEED_API_KEY=your_wavespeed_api_key
+
+# App Configuration
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+```
+
+### **Get API Keys**
+
+1. **Mux**: https://dashboard.mux.com/settings/access-tokens
+
+   - Create new token with full permissions
+   - Copy Token ID and Token Secret
+
+2. **OpenAI**: https://platform.openai.com/api-keys
+
+   - Create new API key
+   - Ensure you have GPT-4 Vision access
+
+3. **Wavespeed (Wan 2.5)**: https://wavespeed.ai
+   - Sign up for Wan 2.5 API access
+   - Get API key for wan 2.5
+
+### **Running Locally**
+
+```bash
+# Development mode
+npm run dev
+
+# Production build
+npm run build
+npm start
+
+# Open browser
+http://localhost:3000
+```
+
+### **FFmpeg Installation**
+
+**macOS:**
+
+```bash
+brew install ffmpeg
+```
+
+**Ubuntu/Debian:**
+
+```bash
+sudo apt update
+sudo apt install ffmpeg
+```
+
+**Windows:**
+
+- Download from https://ffmpeg.org/download.html
+- Add to PATH environment variable
 
 ---
 
@@ -1108,107 +1216,6 @@ Response: {
 
 ---
 
-## 🚀 **Getting Started**
-
-### **Prerequisites**
-
-```bash
-# Required software
-Node.js >= 20.0.0
-npm >= 10.0.0
-FFmpeg >= 4.4
-
-# Check versions
-node --version
-npm --version
-ffmpeg -version
-```
-
-### **Installation**
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/yourusername/mux-ai-ads-placement.git
-cd mux-ai-ads-placement
-
-# 2. Install dependencies
-npm install
-
-# 3. Set up environment variables
-cp .env.example .env.local
-```
-
-### **Environment Variables**
-
-Create `.env.local` with the following:
-
-```bash
-# Mux Configuration (Required)
-MUX_TOKEN_ID=your_mux_token_id
-MUX_TOKEN_SECRET=your_mux_token_secret
-
-# OpenAI Configuration (Required)
-OPENAI_API_KEY=your_openai_api_key
-
-# Wan API Configuration (Required for video generation)
-WAVESPEED_API_KEY=your_wavespeed_api_key
-
-# App Configuration
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-```
-
-### **Get API Keys**
-
-1. **Mux**: https://dashboard.mux.com/settings/access-tokens
-
-   - Create new token with full permissions
-   - Copy Token ID and Token Secret
-
-2. **OpenAI**: https://platform.openai.com/api-keys
-
-   - Create new API key
-   - Ensure you have GPT-4 Vision access
-
-3. **Wavespeed (Wan 2.5)**: https://wavespeed.ai
-   - Sign up for Wan 2.5 API access
-   - Get API key for wan 2.5
-
-### **Running Locally**
-
-```bash
-# Development mode
-npm run dev
-
-# Production build
-npm run build
-npm start
-
-# Open browser
-http://localhost:3000
-```
-
-### **FFmpeg Installation**
-
-**macOS:**
-
-```bash
-brew install ffmpeg
-```
-
-**Ubuntu/Debian:**
-
-```bash
-sudo apt update
-sudo apt install ffmpeg
-```
-
-**Windows:**
-
-- Download from https://ffmpeg.org/download.html
-- Add to PATH environment variable
-
----
-
 ## 📁 **Project Structure**
 
 ```
@@ -1839,11 +1846,17 @@ curl -I "https://stream.mux.com/PLAYBACK_ID.m3u8"
 
 ---
 
-## 📜 **License**
+## 🙏 **Acknowledgments**
 
-MIT License - see [LICENSE](LICENSE) file for details
+Special thanks to:
 
----
+- **Mux** - For providing the amazing video infrastructure, AI workflows, and player
+- **OpenAI** - For GPT-4 Vision and GPT-4 APIs that power our analysis
+- **Wavespeed** - For Wan 2.5 API access
+- **Vercel** - For Next.js framework and deployment platform
+- **shadcn** - For the beautiful UI component library
+- **Radix UI** - For accessible component primitives
+- **Tailwind CSS** - For the utility-first CSS framework
 
 **© 2024 Mux AI Ads Placement • Built for DEV Worldwide Show and Tell Challenge**
 
